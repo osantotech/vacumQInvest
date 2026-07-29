@@ -21,8 +21,8 @@ export default function ThreeX() {
       if (!res.ok) throw new Error('Falha ao carregar operações 3X');
       
       const data = await res.json();
-      setOperations(data.operations);
-      setTotalPages(data.totalPages);
+      setOperations(data.data || []);
+      setTotalPages(Math.ceil((data.pagination?.total || 0) / (data.pagination?.limit || 20)) || 1);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

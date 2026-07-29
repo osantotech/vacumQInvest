@@ -31,8 +31,8 @@ export default function Resultados() {
       if (!res.ok) throw new Error('Falha ao carregar resultados');
       
       const data = await res.json();
-      setResults(data.results);
-      setTotalPages(data.totalPages);
+      setResults(data.data || []);
+      setTotalPages(Math.ceil((data.pagination?.total || 0) / (data.pagination?.limit || 20)) || 1);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

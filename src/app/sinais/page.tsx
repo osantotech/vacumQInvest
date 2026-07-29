@@ -42,8 +42,8 @@ export default function Sinais() {
       if (!res.ok) throw new Error('Falha ao carregar sinais');
       
       const data = await res.json();
-      setAlerts(data.alerts);
-      setTotalPages(data.totalPages);
+      setAlerts(data.data || []);
+      setTotalPages(Math.ceil((data.pagination?.total || 0) / (data.pagination?.limit || 20)) || 1);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
