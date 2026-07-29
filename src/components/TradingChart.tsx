@@ -10,6 +10,7 @@ interface TradingChartProps {
 
 export default function TradingChart({ symbol = 'BTCUSDT', interval = '15m' }: TradingChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [chart, setChart] = useState<IChartApi | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [candlestickSeries, setCandlestickSeries] = useState<ISeriesApi<"Candlestick"> | null>(null);
