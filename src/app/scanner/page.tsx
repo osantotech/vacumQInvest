@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import FilterBar from '@/components/FilterBar';
 import StatusBadge from '@/components/StatusBadge';
 import { formatPrice, formatDateTimeBR } from '@/lib/calculations';
 

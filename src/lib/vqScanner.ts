@@ -84,7 +84,6 @@ export function analyzeVQPullback(klines: Kline[], symbol: string, timeframe: st
 
   for (let i = 200; i < klines.length; i++) {
     const candle = klines[i];
-    const prevCandle = klines[i - 1];
     const s8 = sma8[i];
     const s21 = sma21[i];
     const prevS8 = sma8[i - 1];

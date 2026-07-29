@@ -190,6 +190,7 @@ export default function Sidebar({ user }: SidebarProps) {
         {/* User Info */}
         {user && (
           <div className="sidebar-user">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               className="sidebar-user-avatar"
               src={user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=2962ff&color=fff&size=72`}

@@ -14,13 +14,13 @@ async function fetchBinanceKlines(symbol: string, interval: string): Promise<Kli
     if (!res.ok) return [];
     
     const data = await res.json();
-    return data.map((d: any[]) => ({
+    return data.map((d: (string | number)[]) => ({
       timestamp: d[0],
-      open: parseFloat(d[1]),
-      high: parseFloat(d[2]),
-      low: parseFloat(d[3]),
-      close: parseFloat(d[4]),
-      volume: parseFloat(d[5])
+      open: typeof d[1] === 'string' ? parseFloat(d[1]) : d[1],
+      high: typeof d[2] === 'string' ? parseFloat(d[2]) : d[2],
+      low: typeof d[3] === 'string' ? parseFloat(d[3]) : d[3],
+      close: typeof d[4] === 'string' ? parseFloat(d[4]) : d[4],
+      volume: typeof d[5] === 'string' ? parseFloat(d[5]) : d[5]
     }));
   } catch (error) {
     console.error(`Error fetching Binance for ${symbol} ${interval}:`, error);
