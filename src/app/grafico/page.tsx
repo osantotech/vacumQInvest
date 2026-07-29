@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
+import CalculadoraRisco from '@/components/CalculadoraRisco';
 
 // O lightweight-charts precisa do objeto window, então desativamos o SSR
 const TradingChart = dynamic(() => import('@/components/TradingChart'), { ssr: false });
@@ -12,10 +13,10 @@ export default function GraficoPage() {
 
   return (
     <div className="animate-in h-full flex flex-col">
-      <div className="page-header mb-6">
+      <div className="page-header mb-4">
         <div>
           <h1>Análise SMC (Futuros)</h1>
-          <p className="page-subtitle">Visualização de Candlesticks</p>
+          <p className="page-subtitle">Visualização Tick-by-Tick e Gestão de Risco</p>
         </div>
         
         <div className="flex gap-4">
@@ -43,8 +44,17 @@ export default function GraficoPage() {
         </div>
       </div>
 
-      <div className="flex-1 w-full min-h-[600px]">
-        <TradingChart symbol={ativo} interval={timeframe} />
+      {/* Cockpit de Trading (Calculadora + Gráfico) */}
+      <div className="flex flex-col xl:flex-row gap-6 flex-1 min-h-[650px]">
+        {/* Barra Lateral da Calculadora */}
+        <div className="xl:w-[320px] shrink-0">
+          <CalculadoraRisco currentPrice={0} />
+        </div>
+
+        {/* Gráfico Principal */}
+        <div className="flex-1 w-full min-h-[500px]">
+          <TradingChart symbol={ativo} interval={timeframe} />
+        </div>
       </div>
     </div>
   );
