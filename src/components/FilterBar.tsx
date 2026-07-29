@@ -24,6 +24,7 @@ export default function FilterBar({ filters, onFilterChange }: FilterBarProps) {
           <option value="">Todos</option>
           <option value="Entrada e Saída v1.16">Entrada e Saída v1.16</option>
           <option value="VacumQ Grécia v1.5">VacumQ Grécia v1.5</option>
+          <option value="VQ Pullback v1.7">VQ Pullback v1.7</option>
         </select>
       </div>
 

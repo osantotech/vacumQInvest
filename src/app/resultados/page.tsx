@@ -98,7 +98,7 @@ export default function Resultados() {
                   <td>{formatDateTimeBR(result.alerts.created_at)}</td>
                   <td>{formatDateTimeBR(result.data_saida)}</td>
                   <td className="font-bold">{result.alerts.ativo}</td>
-                  <td className="text-xs">{result.alerts.indicador}</td>
+                  <td className="text-xs">{result.alerts.indicador.replace('Entrada e Saída', 'E&S').replace('VacumQ Grécia', 'Grécia').replace('VQ Pullback', 'VQ PB')}</td>
                   <td className="font-mono">{formatPrice(result.alerts.preco_entrada)}</td>
                   <td className="font-mono">{formatPrice(result.preco_saida)}</td>
                   <td className={`font-mono font-semibold ${result.resultado_pct && result.resultado_pct > 0 ? 'text-green' : 'text-red'}`}>

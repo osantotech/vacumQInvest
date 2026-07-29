@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('results')
       .select('*, alerts!inner(*)', { count: 'exact' })
-      .order('created_at', { ascending: false })
+      .order('data_saida', { ascending: false })
       .range(offset, offset + limit - 1);
 
     // Apply filters on the joined alerts table

@@ -130,7 +130,7 @@ export default function Sinais() {
                   <td>{formatDateTimeBR(alert.created_at)}</td>
                   <td className="font-bold">{alert.ativo}</td>
                   <td>{alert.timeframe}m</td>
-                  <td className="text-xs">{alert.indicador.replace('Entrada e Saída', 'E&S').replace('VacumQ Grécia', 'Grécia')}</td>
+                  <td className="text-xs">{alert.indicador.replace('Entrada e Saída', 'E&S').replace('VacumQ Grécia', 'Grécia').replace('VQ Pullback', 'VQ PB')}</td>
                   <td><StatusBadge type="direction" value={alert.direcao} /></td>
                   <td className="font-mono">{formatPrice(alert.preco_entrada)}</td>
                   <td className="font-mono text-red">{formatPrice(alert.stop)}</td>
