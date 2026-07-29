@@ -29,7 +29,7 @@ export default function CalculadoraRisco({ currentPrice }: CalculadoraRiscoProps
     if (entryPrice === '' && currentPrice > 0) {
       setEntryPrice(currentPrice);
     }
-  }, [currentPrice]);
+  }, [currentPrice, entryPrice]);
 
   useEffect(() => {
     if (capital <= 0 || riskPercent <= 0 || !entryPrice || !stopLoss) {

@@ -35,7 +35,8 @@ export default function TradingChart({ symbol = 'BTCUSDT', interval = '15m' }: T
       }
     });
 
-    const newSeries = newChart.addCandlestickSeries({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newSeries = (newChart as any).addCandlestickSeries({
       upColor: '#26a69a', // Verde institucional
       downColor: '#ef5350', // Vermelho institucional
       borderVisible: false,
