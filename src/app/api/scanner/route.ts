@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
-import { analyzeVQPullback, type Kline } from '@/lib/vqScanner';
+import { analyzeVQPullback, type Kline, type VQSignal } from '@/lib/vqScanner';
 import { sendTelegramScanner } from '@/lib/telegram';
 
 export const dynamic = 'force-dynamic';
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
   const shuffledSymbols = symbols.sort(() => 0.5 - Math.random());
   const selectedSymbols = shuffledSymbols.slice(0, 10);
 
-  const newSignals = [];
+  const newSignals: VQSignal[] = [];
 
   // 2. Fetch data parallelly
   for (const symbol of selectedSymbols) {

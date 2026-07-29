@@ -30,9 +30,9 @@ export default function ThreeX() {
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     fetchOperations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const onSaved = () => {
