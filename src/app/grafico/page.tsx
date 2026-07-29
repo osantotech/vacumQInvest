@@ -48,14 +48,14 @@ export default function GraficoPage() {
       </div>
 
       {/* Cockpit de Trading (Calculadora + Gráfico) */}
-      <div className="flex flex-col xl:flex-row gap-6 flex-1 min-h-[650px]">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', flex: 1, minHeight: '650px' }}>
         {/* Barra Lateral da Calculadora */}
-        <div className="xl:w-[320px] shrink-0">
+        <div style={{ width: '100%', maxWidth: '340px', flexShrink: 0 }}>
           <CalculadoraRisco currentPrice={0} />
         </div>
 
         {/* Gráfico Principal */}
-        <div className="flex-1 w-full min-h-[500px]">
+        <div style={{ flex: 1, minWidth: '300px', minHeight: '500px' }}>
           <TradingChart symbol={ativo} interval={timeframe} />
         </div>
       </div>

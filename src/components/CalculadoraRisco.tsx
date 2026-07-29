@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import './CalculadoraRisco.css';
 
 interface CalculadoraRiscoProps {
   currentPrice: number;
@@ -78,114 +79,114 @@ export default function CalculadoraRisco({ currentPrice }: CalculadoraRiscoProps
   }, [capital, riskPercent, tipo, alavancagem, entryPrice, stopLoss, takeProfit]);
 
   return (
-    <div className="bg-bg-secondary border border-glass-border rounded-xl p-5 flex flex-col gap-4 shadow-lg w-full max-w-sm h-full overflow-y-auto">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
-          <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div className="calc-container">
+      <div className="calc-header">
+        <h2 className="calc-title">
+          <svg className="calc-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
           </svg>
-          Calculadora de Risco
+          Calculadora SMC
         </h2>
       </div>
 
       {/* Capital e Risco */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="calc-grid">
         <div>
-          <label className="block text-xs text-text-muted mb-1 font-medium uppercase">Capital Total ($)</label>
+          <label className="calc-label">Capital Total ($)</label>
           <input 
             type="number" 
             value={capital}
             onChange={(e) => setCapital(Number(e.target.value))}
-            className="w-full bg-bg-primary border border-glass-border rounded-lg px-3 py-2 text-white focus:outline-none focus:border-accent transition-colors"
+            className="calc-input"
           />
         </div>
         <div>
-          <label className="block text-xs text-text-muted mb-1 font-medium uppercase">Risco (%)</label>
-          <div className="relative">
+          <label className="calc-label">Risco (%)</label>
+          <div className="calc-input-wrapper">
             <input 
               type="number" 
               value={riskPercent}
               onChange={(e) => setRiskPercent(Number(e.target.value))}
               step="0.1"
-              className="w-full bg-bg-primary border border-glass-border rounded-lg px-3 py-2 text-white focus:outline-none focus:border-accent transition-colors pr-8"
+              className="calc-input with-icon-right"
             />
-            <span className="absolute right-3 top-2.5 text-text-muted">%</span>
+            <span className="calc-input-icon-right">%</span>
           </div>
         </div>
       </div>
 
       {/* Tipo e Alavancagem */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="calc-grid">
         <div>
-          <label className="block text-xs text-text-muted mb-1 font-medium uppercase">Tipo</label>
-          <div className="flex rounded-lg overflow-hidden border border-glass-border">
+          <label className="calc-label">Tipo</label>
+          <div className="calc-btn-group">
             <button 
               onClick={() => setTipo('LONG')}
-              className={`flex-1 py-2 text-xs font-bold transition-colors ${tipo === 'LONG' ? 'bg-green text-white' : 'bg-bg-primary text-text-muted hover:bg-glass'}`}
+              className={`calc-btn ${tipo === 'LONG' ? 'active-long' : ''}`}
             >
               LONG
             </button>
             <button 
               onClick={() => setTipo('SHORT')}
-              className={`flex-1 py-2 text-xs font-bold transition-colors ${tipo === 'SHORT' ? 'bg-red text-white' : 'bg-bg-primary text-text-muted hover:bg-glass'}`}
+              className={`calc-btn ${tipo === 'SHORT' ? 'active-short' : ''}`}
             >
               SHORT
             </button>
           </div>
         </div>
         <div>
-          <label className="block text-xs text-text-muted mb-1 font-medium uppercase">Alavancagem</label>
-          <div className="relative">
+          <label className="calc-label">Alavancagem</label>
+          <div className="calc-input-wrapper">
             <input 
               type="number" 
               value={alavancagem}
               onChange={(e) => setAlavancagem(Number(e.target.value))}
-              className="w-full bg-bg-primary border border-glass-border rounded-lg px-3 py-2 text-white focus:outline-none focus:border-accent transition-colors pr-8"
+              className="calc-input with-icon-right"
             />
-            <span className="absolute right-3 top-2.5 text-text-muted">x</span>
+            <span className="calc-input-icon-right">x</span>
           </div>
         </div>
       </div>
 
-      <div className="h-px w-full bg-glass-border my-1"></div>
+      <div className="calc-divider"></div>
 
       {/* Preços */}
-      <div className="space-y-3">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div>
-          <label className="block text-xs text-text-muted mb-1 font-medium uppercase">Preço de Entrada</label>
-          <div className="relative">
-            <span className="absolute left-3 top-2.5 text-text-muted">$</span>
+          <label className="calc-label">Preço de Entrada</label>
+          <div className="calc-input-wrapper">
+            <span className="calc-input-icon-left">$</span>
             <input 
               type="number" 
               value={entryPrice}
               onChange={(e) => setEntryPrice(e.target.value ? Number(e.target.value) : '')}
-              className="w-full bg-bg-primary border border-glass-border rounded-lg pl-7 pr-3 py-2 text-white focus:outline-none focus:border-accent transition-colors"
+              className="calc-input with-icon-left"
               placeholder="Ex: 63400.50"
             />
           </div>
         </div>
         <div>
-          <label className="block text-xs text-text-muted mb-1 font-medium uppercase">Stop Loss</label>
-          <div className="relative">
-            <span className="absolute left-3 top-2.5 text-text-muted">$</span>
+          <label className="calc-label">Stop Loss</label>
+          <div className="calc-input-wrapper">
+            <span className="calc-input-icon-left">$</span>
             <input 
               type="number" 
               value={stopLoss}
               onChange={(e) => setStopLoss(e.target.value ? Number(e.target.value) : '')}
-              className="w-full bg-bg-primary border border-red/50 rounded-lg pl-7 pr-3 py-2 text-white focus:outline-none focus:border-red transition-colors"
+              className="calc-input with-icon-left danger"
               placeholder="Obrigatório"
             />
           </div>
         </div>
         <div>
-          <label className="block text-xs text-text-muted mb-1 font-medium uppercase">Take Profit (Opcional)</label>
-          <div className="relative">
-            <span className="absolute left-3 top-2.5 text-text-muted">$</span>
+          <label className="calc-label">Take Profit (Opcional)</label>
+          <div className="calc-input-wrapper">
+            <span className="calc-input-icon-left">$</span>
             <input 
               type="number" 
               value={takeProfit}
               onChange={(e) => setTakeProfit(e.target.value ? Number(e.target.value) : '')}
-              className="w-full bg-bg-primary border border-green/50 rounded-lg pl-7 pr-3 py-2 text-white focus:outline-none focus:border-green transition-colors"
+              className="calc-input with-icon-left success"
               placeholder="Opcional"
             />
           </div>
@@ -193,38 +194,38 @@ export default function CalculadoraRisco({ currentPrice }: CalculadoraRiscoProps
       </div>
 
       {/* Resultados da Calculadora */}
-      <div className="mt-2 bg-bg-primary rounded-lg p-4 border border-glass-border">
-        <h3 className="text-sm font-semibold text-text-primary mb-3 text-center">Tamanho da Posição</h3>
+      <div className="calc-results">
+        <h3 className="calc-results-title">Tamanho da Posição</h3>
         
-        <div className="flex justify-between items-end mb-4">
-          <span className="text-3xl font-bold text-accent">{positionSizeAsset > 0 ? positionSizeAsset.toFixed(4) : '0.00'}</span>
-          <span className="text-sm text-text-muted mb-1">Contratos</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
+          <span className="calc-result-value accent">{positionSizeAsset > 0 ? positionSizeAsset.toFixed(4) : '0.00'}</span>
+          <span className="calc-result-label">Contratos</span>
         </div>
 
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-text-muted">Tamanho Total:</span>
-            <span className="font-medium">${positionSizeUSD.toFixed(2)}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className="calc-result-row">
+            <span className="calc-result-label">Tamanho Total:</span>
+            <span className="calc-result-value">${positionSizeUSD.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-text-muted">Margem Usada ({alavancagem}x):</span>
-            <span className="font-medium">${marginRequired.toFixed(2)}</span>
+          <div className="calc-result-row">
+            <span className="calc-result-label">Margem ({alavancagem}x):</span>
+            <span className="calc-result-value">${marginRequired.toFixed(2)}</span>
           </div>
-          <div className="h-px w-full bg-glass-border my-1"></div>
-          <div className="flex justify-between text-red">
-            <span>Risco Financeiro:</span>
-            <span className="font-bold">-${potentialLoss.toFixed(2)}</span>
+          <div className="calc-divider"></div>
+          <div className="calc-result-row">
+            <span className="calc-result-label">Risco:</span>
+            <span className="calc-result-value red">-${potentialLoss.toFixed(2)}</span>
           </div>
           {potentialProfit > 0 && (
-            <div className="flex justify-between text-green">
-              <span>Lucro Potencial:</span>
-              <span className="font-bold">+${potentialProfit.toFixed(2)}</span>
+            <div className="calc-result-row">
+              <span className="calc-result-label">Lucro Potencial:</span>
+              <span className="calc-result-value green">+${potentialProfit.toFixed(2)}</span>
             </div>
           )}
           {rrRatio > 0 && (
-            <div className="flex justify-between text-accent">
-              <span>Risco/Retorno:</span>
-              <span className="font-bold">1 : {rrRatio.toFixed(2)}</span>
+            <div className="calc-result-row">
+              <span className="calc-result-label">Risco/Retorno:</span>
+              <span className="calc-result-value accent">1 : {rrRatio.toFixed(2)}</span>
             </div>
           )}
         </div>
