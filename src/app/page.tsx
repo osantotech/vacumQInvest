@@ -29,7 +29,7 @@ export default function Dashboard() {
         const alertsData = await alertsRes.json();
         
         setStats(statsData);
-        setRecentAlerts(alertsData.alerts);
+        setRecentAlerts(alertsData.data || []);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
