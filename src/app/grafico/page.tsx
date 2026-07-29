@@ -5,7 +5,10 @@ import { useState } from 'react';
 import CalculadoraRisco from '@/components/CalculadoraRisco';
 
 // O lightweight-charts precisa do objeto window, então desativamos o SSR
-const TradingChart = dynamic(() => import('@/components/TradingChart'), { ssr: false });
+const TradingChart = dynamic(
+  () => import('@/components/TradingChart'),
+  { ssr: false }
+);
 
 export default function GraficoPage() {
   const [ativo, setAtivo] = useState('BTCUSDT');
