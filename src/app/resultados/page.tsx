@@ -24,7 +24,6 @@ interface ResultRow {
   data_saida: string;
   duracao_minutos: number | null;
   status: string;
-  observacao: string | null;
   alert: AlertData;
 }
 
@@ -104,7 +103,6 @@ export default function Resultados() {
           data_saida,
           duracao_minutos,
           status,
-          observacao,
           alert:alerts!inner (
             id,
             created_at,
@@ -126,7 +124,6 @@ export default function Resultados() {
         data_saida: r.data_saida,
         duracao_minutos: r.duracao_minutos,
         status: r.status,
-        observacao: r.observacao,
         alert: Array.isArray(r.alert) ? r.alert[0] : r.alert,
       })).filter((r: ResultRow) => r.alert);
 
