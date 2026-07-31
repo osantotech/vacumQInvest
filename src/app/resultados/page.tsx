@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { formatDuration } from '@/lib/calculations';
 import './resultados.css';
 
@@ -89,42 +88,26 @@ export default function Resultados() {
   // Copy state
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Fetch data once from Supabase
+  // Fetch data via API endpoint
   const fetchResults = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const supabase = createClient();
-      const { data, error: dbError } = await supabase
-        .from('results')
-        .select(`
-          id,
-          preco_saida,
-          data_saida,
-          duracao_minutos,
-          status,
-          alert:alerts!inner (
-            id,
-            created_at,
-            ativo,
-            timeframe,
-            indicador,
-            direcao,
-            preco_entrada
-          )
-        `)
-        .order('created_at', { referencedTable: 'alerts', ascending: false });
-
-      if (dbError) throw new Error(dbError.message);
-
+      const res = await fetch('/api/results?limit=500');
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || errJson.details || 'Falha ao carregar resultados');
+      }
+      
+      const json = await res.json();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rows: ResultRow[] = (data || []).map((r: any) => ({
+      const rows: ResultRow[] = (json.data || []).map((r: any) => ({
         id: r.id,
         preco_saida: Number(r.preco_saida),
         data_saida: r.data_saida,
         duracao_minutos: r.duracao_minutos,
         status: r.status,
-        alert: Array.isArray(r.alert) ? r.alert[0] : r.alert,
+        alert: r.alerts || r.alert,
       })).filter((r: ResultRow) => r.alert);
 
       setResults(rows);

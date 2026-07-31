@@ -145,30 +145,38 @@ export async function POST(request: NextRequest) {
 // ------------------------------------------------------------------
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient();
-
-    // Verify authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const supabase = createServiceClient();
 
     const { searchParams } = new URL(request.url);
     const indicador = searchParams.get('indicador');
     const ativo = searchParams.get('ativo');
     const scalpOnly = searchParams.get('scalp_only') === 'true';
     const page = parseInt(searchParams.get('page') ?? '1', 10);
-    const limit = parseInt(searchParams.get('limit') ?? '20', 10);
+    const limit = parseInt(searchParams.get('limit') ?? '100', 10);
 
     const offset = (page - 1) * limit;
 
-    // Query results joined with alerts
+    // Query results joined with alerts (explicit column selection to avoid missing column errors)
     let query = supabase
       .from('results')
-      .select('*, alerts!inner(*)', { count: 'exact' })
+      .select(`
+        id,
+        preco_saida,
+        data_saida,
+        duracao_minutos,
+        status,
+        resultado_pct,
+        resultado_marg,
+        alerts!inner (
+          id,
+          created_at,
+          ativo,
+          timeframe,
+          indicador,
+          direcao,
+          preco_entrada
+        )
+      `, { count: 'exact' })
       .order('data_saida', { ascending: false })
       .range(offset, offset + limit - 1);
 
