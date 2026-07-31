@@ -1,0 +1,371 @@
+/* ============================================================
+   VacumQInvest — Resultados de Alertas (Spread Table)
+   Premium dark-mode data table with interactive controls
+   ============================================================ */
+
+/* Controls Bar */
+.ra-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  padding: 20px;
+  background: #1E222D;
+  border: 1px solid #2A2E39;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.ra-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ra-control-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #787B86;
+}
+
+.ra-leverage-btns {
+  display: flex;
+  gap: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #2A2E39;
+}
+
+.ra-lev-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #0B0E11;
+  color: #787B86;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-right: 1px solid #2A2E39;
+}
+
+.ra-lev-btn:last-child {
+  border-right: none;
+}
+
+.ra-lev-btn:hover {
+  background: #1E222D;
+  color: #D1D4DC;
+}
+
+.ra-lev-btn.active {
+  background: #2962FF;
+  color: #fff;
+}
+
+.ra-capital-input {
+  width: 120px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #0B0E11;
+  border: 1px solid #2A2E39;
+  border-radius: 8px;
+  color: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.ra-capital-input:focus {
+  border-color: #2962FF;
+}
+
+/* Filters Bar */
+.ra-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 20px;
+  background: #161A25;
+  border: 1px solid #2A2E39;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.ra-filter-select {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #0B0E11;
+  border: 1px solid #2A2E39;
+  border-radius: 6px;
+  color: #D1D4DC;
+  outline: none;
+  cursor: pointer;
+}
+
+.ra-filter-select:focus {
+  border-color: #2962FF;
+}
+
+.ra-filter-date {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #0B0E11;
+  border: 1px solid #2A2E39;
+  border-radius: 6px;
+  color: #D1D4DC;
+  outline: none;
+}
+
+.ra-filter-date:focus {
+  border-color: #2962FF;
+}
+
+/* Stats Summary */
+.ra-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.ra-stat-card {
+  flex: 1;
+  min-width: 140px;
+  padding: 16px 20px;
+  background: #1E222D;
+  border: 1px solid #2A2E39;
+  border-radius: 12px;
+}
+
+.ra-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #787B86;
+  margin-bottom: 6px;
+}
+
+.ra-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #D1D4DC;
+}
+
+.ra-stat-value.green { color: #00E676; }
+.ra-stat-value.red { color: #FF5252; }
+
+/* Table Container */
+.ra-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #2A2E39;
+  border-radius: 12px;
+  background: #1E222D;
+}
+
+/* The Table */
+.ra-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ra-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.ra-table thead th {
+  padding: 12px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #787B86;
+  background: #0B0E11;
+  border-bottom: 2px solid #2A2E39;
+  text-align: center;
+}
+
+.ra-table thead th:nth-child(3) {
+  text-align: left;
+}
+
+.ra-table tbody tr {
+  border-bottom: 1px solid #2A2E39;
+  transition: background-color 0.12s ease;
+}
+
+.ra-table tbody tr:nth-child(odd) {
+  background: #1E222D;
+}
+
+.ra-table tbody tr:nth-child(even) {
+  background: #161A25;
+}
+
+.ra-table tbody tr:hover {
+  background: #252930 !important;
+}
+
+.ra-table tbody td {
+  padding: 10px 14px;
+  color: #D1D4DC;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ra-table tbody td:nth-child(3) {
+  text-align: left;
+}
+
+/* Direction Column */
+.ra-dir {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.ra-dir-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.ra-dir-dot.long { background: #00E676; box-shadow: 0 0 6px rgba(0, 230, 118, 0.4); }
+.ra-dir-dot.short { background: #FF5252; box-shadow: 0 0 6px rgba(255, 82, 82, 0.4); }
+
+.ra-dir-arrow {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ra-dir-arrow.long { color: #00E676; }
+.ra-dir-arrow.short { color: #FF5252; }
+
+/* Ativo + Copy */
+.ra-ativo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ra-ativo-name {
+  font-weight: 700;
+  color: #D1D4DC;
+  font-size: 13px;
+}
+
+.ra-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: 1px solid #2A2E39;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #787B86;
+  font-size: 12px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.ra-copy-btn:hover {
+  background: #2962FF;
+  border-color: #2962FF;
+  color: #fff;
+}
+
+.ra-copy-btn.copied {
+  background: #00E676;
+  border-color: #00E676;
+  color: #000;
+}
+
+/* Price mono */
+.ra-price {
+  font-family: 'Inter', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+/* Color utilities */
+.ra-green { color: #00E676 !important; }
+.ra-red { color: #FF5252 !important; }
+.ra-bold { font-weight: 700; }
+
+/* Footer */
+.ra-table tfoot td {
+  padding: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #D1D4DC;
+  background: #0B0E11;
+  border-top: 2px solid #2A2E39;
+  text-align: center;
+}
+
+/* Loading skeleton */
+.ra-skeleton {
+  height: 36px;
+  background: linear-gradient(90deg, #1E222D 25%, #252930 50%, #1E222D 75%);
+  background-size: 200% 100%;
+  animation: ra-shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+@keyframes ra-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ra-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ra-leverage-btns {
+    width: 100%;
+  }
+
+  .ra-lev-btn {
+    flex: 1;
+    text-align: center;
+  }
+
+  .ra-capital-input {
+    width: 100%;
+  }
+
+  .ra-stats {
+    gap: 8px;
+  }
+
+  .ra-stat-card {
+    min-width: 100px;
+    padding: 12px;
+  }
+
+  .ra-stat-value {
+    font-size: 16px;
+  }
+
+  /* Hide capital result columns on mobile */
+  .ra-table thead th.ra-hide-mobile,
+  .ra-table tbody td.ra-hide-mobile,
+  .ra-table tfoot td.ra-hide-mobile {
+    display: none;
+  }
+}

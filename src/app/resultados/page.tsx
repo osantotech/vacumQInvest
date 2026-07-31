@@ -1,146 +1,465 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import FilterBar from '@/components/FilterBar';
-import StatusBadge from '@/components/StatusBadge';
-import { formatPrice, formatPct, formatDateTimeBR, formatDuration } from '@/lib/calculations';
-import type { ResultWithAlert } from '@/lib/types';
+import { useEffect, useState, useCallback } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { formatDuration } from '@/lib/calculations';
+import './resultados.css';
 
+// ============================================================
+// Types
+// ============================================================
+interface AlertData {
+  id: string;
+  created_at: string;
+  ativo: string;
+  timeframe: string;
+  indicador: string;
+  direcao: string;
+  preco_entrada: number;
+}
+
+interface ResultRow {
+  id: string;
+  preco_saida: number;
+  data_saida: string;
+  duracao_minutos: number | null;
+  status: string;
+  observacao: string | null;
+  alert: AlertData;
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+function formatDateTimeBR(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }) + ' ' + d.toLocaleTimeString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function formatPriceSmart(value: number): string {
+  return Number(value).toString();
+}
+
+function formatBRL(value: number): string {
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatCapitalHeader(value: number): string {
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+}
+
+function isLongDir(dir: string): boolean {
+  return dir === 'LONG' || dir === 'SCALP_LONG';
+}
+
+// ============================================================
+// Component
+// ============================================================
 export default function Resultados() {
-  const [results, setResults] = useState<ResultWithAlert[]>([]);
+  const [results, setResults] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  
-  const [filters, setFilters] = useState({
-    indicador: '',
-    ativo: ''
-  });
 
-  const fetchResults = async () => {
+  // Interactive controls
+  const [leverage, setLeverage] = useState(20);
+  const [capital1, setCapital1] = useState(1000);
+  const [capital2, setCapital2] = useState(10000);
+
+  // Filters
+  const [filterDir, setFilterDir] = useState('');
+  const [filterAtivo, setFilterAtivo] = useState('');
+  const [filterDateStart, setFilterDateStart] = useState('');
+  const [filterDateEnd, setFilterDateEnd] = useState('');
+
+  // Copy state
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Fetch data once from Supabase
+  const fetchResults = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const query = new URLSearchParams();
-      query.append('page', page.toString());
-      if (filters.indicador) query.append('indicador', filters.indicador);
-      if (filters.ativo) query.append('ativo', filters.ativo);
+      const supabase = createClient();
+      const { data, error: dbError } = await supabase
+        .from('results')
+        .select(`
+          id,
+          preco_saida,
+          data_saida,
+          duracao_minutos,
+          status,
+          observacao,
+          alert:alerts!inner (
+            id,
+            created_at,
+            ativo,
+            timeframe,
+            indicador,
+            direcao,
+            preco_entrada
+          )
+        `)
+        .order('created_at', { referencedTable: 'alerts', ascending: false });
 
-      const res = await fetch(`/api/results?${query.toString()}`);
-      if (!res.ok) throw new Error('Falha ao carregar resultados');
-      
-      const data = await res.json();
-      setResults(data.data || []);
-      setTotalPages(Math.ceil((data.pagination?.total || 0) / (data.pagination?.limit || 20)) || 1);
+      if (dbError) throw new Error(dbError.message);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows: ResultRow[] = (data || []).map((r: any) => ({
+        id: r.id,
+        preco_saida: Number(r.preco_saida),
+        data_saida: r.data_saida,
+        duracao_minutos: r.duracao_minutos,
+        status: r.status,
+        observacao: r.observacao,
+        alert: Array.isArray(r.alert) ? r.alert[0] : r.alert,
+      })).filter((r: ResultRow) => r.alert);
+
+      setResults(rows);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchResults();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, filters]);
+  }, [fetchResults]);
 
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setPage(1);
+  // Copy to clipboard
+  const handleCopy = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    }
   };
 
-  const totalPnl = results.reduce((sum, r) => sum + (r.resultado_marg || 0), 0);
-  const winRate = results.length > 0 ? (results.filter(r => r.status !== 'STOP').length / results.length) * 100 : 0;
-  const avgDuration = results.length > 0 ? results.reduce((sum, r) => sum + (r.duracao_minutos || 0), 0) / results.length : 0;
+  // Unique ativos for filter dropdown
+  const uniqueAtivos = Array.from(new Set(results.map(r => r.alert.ativo))).sort();
+
+  // Apply filters (frontend-only)
+  const filtered = results.filter(r => {
+    if (filterDir && !r.alert.direcao.includes(filterDir)) return false;
+    if (filterAtivo && r.alert.ativo !== filterAtivo) return false;
+    if (filterDateStart) {
+      const start = new Date(filterDateStart);
+      if (new Date(r.alert.created_at) < start) return false;
+    }
+    if (filterDateEnd) {
+      const end = new Date(filterDateEnd + 'T23:59:59');
+      if (new Date(r.alert.created_at) > end) return false;
+    }
+    return true;
+  });
+
+  // Compute derived values for each row
+  const computedRows = filtered.map(r => {
+    const entry = Number(r.alert.preco_entrada);
+    const exit = Number(r.preco_saida);
+    const long = isLongDir(r.alert.direcao);
+
+    const pctResult = entry > 0
+      ? (long
+          ? ((exit - entry) / entry) * 100
+          : ((entry - exit) / entry) * 100)
+      : 0;
+
+    const spreadLev = pctResult * leverage;
+    const res1 = capital1 * (1 + (pctResult / 100) * leverage);
+    const res2 = capital2 * (1 + (pctResult / 100) * leverage);
+    const dur = r.duracao_minutos ?? 0;
+
+    return { ...r, pctResult, spreadLev, res1, res2, dur };
+  });
+
+  // Summary stats
+  const totalOps = computedRows.length;
+  const wins = computedRows.filter(r => r.pctResult > 0).length;
+  const stops = computedRows.filter(r => r.pctResult <= 0).length;
+  const winRate = totalOps > 0 ? (wins / totalOps) * 100 : 0;
+  const totalSpread = computedRows.reduce((sum, r) => sum + r.spreadLev, 0);
 
   return (
-    <div className="animate-in">
-      <div className="page-header mb-6">
-        <h1>Resultados</h1>
-        <p className="page-subtitle">Histórico de operações fechadas</p>
+    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+
+      {/* Page Header */}
+      <div style={{ marginBottom: '16px' }}>
+        <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#D1D4DC', textTransform: 'uppercase', letterSpacing: '0.02em', margin: 0 }}>
+          RESULTADOS DE ALERTAS
+        </h1>
+        <p style={{ fontSize: '13px', color: '#787B86', marginTop: '4px' }}>
+          {totalOps} operações · WR {winRate.toFixed(1)}%
+        </p>
       </div>
 
-      <FilterBar filters={filters} onFilterChange={handleFilterChange} />
+      {/* Controls Bar */}
+      <div className="ra-controls">
+        {/* Leverage */}
+        <div className="ra-control-group">
+          <span className="ra-control-label">Alavancagem</span>
+          <div className="ra-leverage-btns">
+            {[20, 50, 100, 150].map(lev => (
+              <button
+                key={lev}
+                className={`ra-lev-btn ${leverage === lev ? 'active' : ''}`}
+                onClick={() => setLeverage(lev)}
+              >
+                {lev}x
+              </button>
+            ))}
+          </div>
+        </div>
 
-      {error && <div className="text-red p-4 bg-red-bg rounded border border-red/20 mb-4">{error}</div>}
+        {/* Capital 1 */}
+        <div className="ra-control-group">
+          <span className="ra-control-label">Capital 1 ($)</span>
+          <input
+            type="number"
+            className="ra-capital-input"
+            value={capital1}
+            onChange={(e) => setCapital1(Number(e.target.value) || 0)}
+          />
+        </div>
 
-      <div className="table-container">
-        <table>
+        {/* Capital 2 */}
+        <div className="ra-control-group">
+          <span className="ra-control-label">Capital 2 ($)</span>
+          <input
+            type="number"
+            className="ra-capital-input"
+            value={capital2}
+            onChange={(e) => setCapital2(Number(e.target.value) || 0)}
+          />
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="ra-filters">
+        <select className="ra-filter-select" value={filterDir} onChange={e => setFilterDir(e.target.value)}>
+          <option value="">Todas Direções</option>
+          <option value="LONG">LONG</option>
+          <option value="SHORT">SHORT</option>
+        </select>
+
+        <select className="ra-filter-select" value={filterAtivo} onChange={e => setFilterAtivo(e.target.value)}>
+          <option value="">Todos Ativos</option>
+          {uniqueAtivos.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+
+        <input
+          type="date"
+          className="ra-filter-date"
+          value={filterDateStart}
+          onChange={e => setFilterDateStart(e.target.value)}
+          placeholder="Data Início"
+        />
+        <input
+          type="date"
+          className="ra-filter-date"
+          value={filterDateEnd}
+          onChange={e => setFilterDateEnd(e.target.value)}
+          placeholder="Data Fim"
+        />
+
+        {(filterDir || filterAtivo || filterDateStart || filterDateEnd) && (
+          <button
+            onClick={() => { setFilterDir(''); setFilterAtivo(''); setFilterDateStart(''); setFilterDateEnd(''); }}
+            style={{ padding: '6px 12px', fontSize: '11px', background: 'transparent', border: '1px solid #2A2E39', borderRadius: '6px', color: '#FF5252', cursor: 'pointer' }}
+          >
+            Limpar filtros
+          </button>
+        )}
+      </div>
+
+      {/* Summary Cards */}
+      <div className="ra-stats">
+        <div className="ra-stat-card">
+          <div className="ra-stat-label">Total Operações</div>
+          <div className="ra-stat-value">{totalOps}</div>
+        </div>
+        <div className="ra-stat-card">
+          <div className="ra-stat-label">Win Rate</div>
+          <div className={`ra-stat-value ${winRate >= 50 ? 'green' : 'red'}`}>{winRate.toFixed(1)}%</div>
+        </div>
+        <div className="ra-stat-card">
+          <div className="ra-stat-label">Ganhos / Stops</div>
+          <div className="ra-stat-value">
+            <span style={{ color: '#00E676' }}>{wins}</span>
+            <span style={{ color: '#787B86' }}> / </span>
+            <span style={{ color: '#FF5252' }}>{stops}</span>
+          </div>
+        </div>
+        <div className="ra-stat-card">
+          <div className="ra-stat-label">P&L Acum. ({leverage}x)</div>
+          <div className={`ra-stat-value ${totalSpread >= 0 ? 'green' : 'red'}`}>
+            {totalSpread >= 0 ? '+' : ''}{formatBRL(totalSpread)}%
+          </div>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{ padding: '12px 16px', background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', borderRadius: '8px', color: '#FF5252', fontSize: '13px', marginBottom: '16px' }}>
+          {error}
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="ra-table-wrap">
+        <table className="ra-table">
           <thead>
             <tr>
+              <th style={{ width: '50px' }}></th>
               <th>Data Alerta</th>
-              <th>Data Saída</th>
-              <th>Ativo</th>
-              <th>Indicador</th>
-              <th>Entrada</th>
-              <th>Saída</th>
+              <th>Nome do Ativo USDT</th>
+              <th>Preço Alerta</th>
+              <th>Data Resultado</th>
+              <th>Preço Resultado</th>
               <th>% Resultado</th>
-              <th>Spread 20x</th>
-              <th>Duração</th>
-              <th>Status</th>
+              <th>Spread {leverage}x</th>
+              <th>Tempo</th>
+              <th className="ra-hide-mobile">Resultado {formatCapitalHeader(capital1)}</th>
+              <th className="ra-hide-mobile">Resultado {formatCapitalHeader(capital2)}</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              Array(5).fill(0).map((_, i) => (
+              Array(8).fill(0).map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={10}><div className="skeleton h-8 w-full rounded"></div></td>
+                  <td colSpan={11}><div className="ra-skeleton"></div></td>
                 </tr>
               ))
-            ) : results.length === 0 ? (
+            ) : computedRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="text-center text-text-muted py-8">Nenhum resultado encontrado</td>
+                <td colSpan={11} style={{ textAlign: 'center', color: '#787B86', padding: '40px 0', fontSize: '14px' }}>
+                  Nenhum resultado encontrado
+                </td>
               </tr>
             ) : (
-              results.map(result => (
-                <tr key={result.id} className={result.resultado_marg && result.resultado_marg > 0 ? 'bg-green-bg/30' : result.resultado_marg && result.resultado_marg < 0 ? 'bg-red-bg/30' : ''}>
-                  <td>{formatDateTimeBR(result.alerts.created_at)}</td>
-                  <td>{formatDateTimeBR(result.data_saida)}</td>
-                  <td className="font-bold">{result.alerts.ativo}</td>
-                  <td className="text-xs">{result.alerts.indicador.replace('Entrada e Saída', 'E&S').replace('VacumQ Grécia', 'Grécia').replace('VQ Pullback', 'VQ PB')}</td>
-                  <td className="font-mono">{formatPrice(result.alerts.preco_entrada)}</td>
-                  <td className="font-mono">{formatPrice(result.preco_saida)}</td>
-                  <td className={`font-mono font-semibold ${result.resultado_pct && result.resultado_pct > 0 ? 'text-green' : 'text-red'}`}>
-                    {result.resultado_pct !== null ? formatPct(result.resultado_pct) : '—'}
-                  </td>
-                  <td className={`font-mono font-bold ${result.resultado_marg && result.resultado_marg > 0 ? 'text-green' : 'text-red'}`}>
-                    {result.resultado_marg !== null ? formatPct(result.resultado_marg) : '—'}
-                  </td>
-                  <td>{result.duracao_minutos ? formatDuration(result.duracao_minutos) : '—'}</td>
-                  <td><StatusBadge type="status" value={result.status} /></td>
-                </tr>
-              ))
+              computedRows.map(row => {
+                const long = isLongDir(row.alert.direcao);
+                return (
+                  <tr key={row.id}>
+                    {/* Col 1: Direction */}
+                    <td>
+                      <div className="ra-dir">
+                        <span className={`ra-dir-dot ${long ? 'long' : 'short'}`}></span>
+                        <span className={`ra-dir-arrow ${long ? 'long' : 'short'}`}>
+                          {long ? '↑' : '↓'}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Col 2: Data Alerta */}
+                    <td style={{ fontSize: '12px', color: '#787B86' }}>
+                      {formatDateTimeBR(row.alert.created_at)}
+                    </td>
+
+                    {/* Col 3: Nome do Ativo */}
+                    <td>
+                      <div className="ra-ativo">
+                        <span className="ra-ativo-name">{row.alert.ativo}</span>
+                        <button
+                          className={`ra-copy-btn ${copiedId === row.id ? 'copied' : ''}`}
+                          onClick={() => handleCopy(row.alert.ativo, row.id)}
+                          title="Copiar ticker"
+                        >
+                          {copiedId === row.id ? '✓' : '📋'}
+                        </button>
+                      </div>
+                    </td>
+
+                    {/* Col 4: Preço Alerta */}
+                    <td className="ra-price">
+                      {formatPriceSmart(row.alert.preco_entrada)}
+                    </td>
+
+                    {/* Col 5: Data Resultado */}
+                    <td style={{ fontSize: '12px', color: '#787B86' }}>
+                      {formatDateTimeBR(row.data_saida)}
+                    </td>
+
+                    {/* Col 6: Preço Resultado */}
+                    <td className="ra-price">
+                      {formatPriceSmart(row.preco_saida)}
+                    </td>
+
+                    {/* Col 7: % Resultado */}
+                    <td className="ra-price">
+                      {formatBRL(row.pctResult)}%
+                    </td>
+
+                    {/* Col 8: Spread Nx */}
+                    <td className={`ra-bold ${row.spreadLev >= 0 ? 'ra-green' : 'ra-red'}`}>
+                      {formatBRL(row.spreadLev)}%
+                    </td>
+
+                    {/* Col 9: Tempo */}
+                    <td style={{ color: '#787B86' }}>
+                      {row.dur > 0 ? formatDuration(row.dur) : '—'}
+                    </td>
+
+                    {/* Col 10: Resultado Capital 1 */}
+                    <td className={`ra-bold ra-hide-mobile ${row.res1 >= capital1 ? 'ra-green' : 'ra-red'}`}>
+                      ${formatBRL(row.res1)}
+                    </td>
+
+                    {/* Col 11: Resultado Capital 2 */}
+                    <td className={`ra-bold ra-hide-mobile ${row.res2 >= capital2 ? 'ra-green' : 'ra-red'}`}>
+                      ${formatBRL(row.res2)}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
-          <tfoot className="table-footer bg-bg-secondary font-bold text-white">
-            <tr>
-              <td colSpan={6} className="text-right">Total na página:</td>
-              <td>Win Rate: {winRate.toFixed(1)}%</td>
-              <td className={totalPnl > 0 ? 'text-green' : 'text-red'}>{totalPnl > 0 ? '+' : ''}{totalPnl.toFixed(1)}%</td>
-              <td>Média: {formatDuration(avgDuration)}</td>
-              <td></td>
-            </tr>
-          </tfoot>
+          {computedRows.length > 0 && (
+            <tfoot>
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'right' }}>
+                  Totais:
+                </td>
+                <td className={totalSpread >= 0 ? 'ra-green' : 'ra-red'} style={{ fontWeight: 800 }}>
+                  {totalSpread >= 0 ? '+' : ''}{formatBRL(totalSpread)}%
+                </td>
+                <td></td>
+                <td className={`ra-hide-mobile ${computedRows.reduce((s, r) => s + r.res1, 0) >= capital1 * totalOps ? 'ra-green' : 'ra-red'}`} style={{ fontWeight: 800 }}>
+                  ${formatBRL(computedRows.reduce((s, r) => s + (r.res1 - capital1), 0))}
+                </td>
+                <td className={`ra-hide-mobile ${computedRows.reduce((s, r) => s + r.res2, 0) >= capital2 * totalOps ? 'ra-green' : 'ra-red'}`} style={{ fontWeight: 800 }}>
+                  ${formatBRL(computedRows.reduce((s, r) => s + (r.res2 - capital2), 0))}
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
-      </div>
-
-      <div className="flex-between mt-4">
-        <button 
-          className="btn btn-secondary btn-sm" 
-          disabled={page === 1 || loading}
-          onClick={() => setPage(p => p - 1)}
-        >
-          Anterior
-        </button>
-        <span className="text-sm text-text-muted">Página {page} de {totalPages || 1}</span>
-        <button 
-          className="btn btn-secondary btn-sm" 
-          disabled={page >= totalPages || loading}
-          onClick={() => setPage(p => p + 1)}
-        >
-          Próxima
-        </button>
       </div>
     </div>
   );
