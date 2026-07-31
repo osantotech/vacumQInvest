@@ -362,10 +362,15 @@ export default function Resultados() {
                       {formatDateTimeBR(row.alert.created_at)}
                     </td>
 
-                    {/* Col 3: Nome do Ativo */}
+                    {/* Col 3: Nome do Ativo + Timeframe */}
                     <td>
                       <div className="ra-ativo">
                         <span className="ra-ativo-name">{row.alert.ativo}</span>
+                        {row.alert.timeframe && (
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: '#787B86', background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: '4px' }}>
+                            {row.alert.timeframe.endsWith('m') || row.alert.timeframe.endsWith('h') ? row.alert.timeframe : `${row.alert.timeframe}m`}
+                          </span>
+                        )}
                         <button
                           className={`ra-copy-btn ${copiedId === row.id ? 'copied' : ''}`}
                           onClick={() => handleCopy(row.alert.ativo, row.id)}
