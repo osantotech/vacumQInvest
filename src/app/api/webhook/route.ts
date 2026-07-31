@@ -72,7 +72,6 @@ export async function POST(request: NextRequest) {
         resultado_pct: pctResult,
         resultado_marg: margResult,
         status: body.status || (pctResult >= 0 ? 'TP1' : 'STOP'),
-        observacao: `Automático via Webhook TradingView (${body.indicador || 'VQ PB v1.8'})`,
       };
 
       const { data: result, error: resultErr } = await supabase
