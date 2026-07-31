@@ -100,12 +100,15 @@ export interface DashboardStats {
 
 export interface WebhookPayload {
   secret: string;
+  tipo?: 'entrada' | 'saida';
   ativo: string;
-  timeframe: string;
-  indicador: string;
-  direcao: DirecaoType;
+  timeframe?: string;
+  indicador?: string;
+  direcao?: DirecaoType;
   via_entrada?: string;
   preco_entrada?: string;
+  preco_saida?: string;
+  status?: ResultStatus;
   stop?: string;
   tp1?: string;
   tp2?: string;

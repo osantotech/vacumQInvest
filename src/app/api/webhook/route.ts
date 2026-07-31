@@ -1,10 +1,11 @@
 // ============================================================
-// VacumQInvest — Webhook API Route
+// VacumQInvest — Webhook API Route (Entradas & Saídas)
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import type { WebhookPayload, Alert } from '@/lib/types';
+import { calculateDurationMinutes, calculateResultPct, calculateResultMarg } from '@/lib/calculations';
 import {
   sendTelegramEntrada,
   sendTelegramScalp,
@@ -28,11 +29,83 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Build alert record
+    // ============================================================
+    // TRATAMENTO DE SAÍDA (tipo: "saida")
+    // ============================================================
+    if (body.tipo === 'saida') {
+      if (!body.ativo || !body.preco_saida) {
+        return NextResponse.json(
+          { error: 'Missing required exit fields: ativo, preco_saida' },
+          { status: 400 }
+        );
+      }
+
+      // Buscar o alerta mais recente aberto para este ativo
+      const { data: latestAlert, error: alertErr } = await supabase
+        .from('alerts')
+        .select('*')
+        .eq('ativo', body.ativo)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (alertErr || !latestAlert) {
+        return NextResponse.json(
+          { error: `No active alert found for asset ${body.ativo}` },
+          { status: 404 }
+        );
+      }
+
+      const precoSaida = parseFloat(body.preco_saida);
+      const dataSaida = new Date().toISOString();
+      const duracaoMinutos = calculateDurationMinutes(latestAlert.created_at, dataSaida);
+
+      const precoEntrada = latestAlert.preco_entrada || precoSaida;
+      const pctResult = calculateResultPct(precoEntrada, precoSaida, latestAlert.direcao);
+      const margResult = calculateResultMarg(pctResult);
+
+      const resultData = {
+        alert_id: latestAlert.id,
+        preco_saida: precoSaida,
+        data_saida: dataSaida,
+        duracao_minutos: duracaoMinutos,
+        resultado_pct: pctResult,
+        resultado_marg: margResult,
+        status: body.status || (pctResult >= 0 ? 'TP1' : 'STOP'),
+        observacao: `Automático via Webhook TradingView (${body.indicador || 'VQ PB v1.8'})`,
+      };
+
+      const { data: result, error: resultErr } = await supabase
+        .from('results')
+        .insert(resultData)
+        .select()
+        .single();
+
+      if (resultErr) {
+        console.error('Failed to insert result:', resultErr);
+        return NextResponse.json(
+          { error: 'Failed to insert result', details: resultErr.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ success: true, type: 'saida', id: result.id, alert_id: latestAlert.id });
+    }
+
+    // ============================================================
+    // TRATAMENTO DE ENTRADA (padrão)
+    // ============================================================
+    if (!body.ativo || !body.direcao) {
+      return NextResponse.json(
+        { error: 'Missing required entry fields: ativo, direcao' },
+        { status: 400 }
+      );
+    }
+
     const alertData = {
       ativo: body.ativo,
-      timeframe: body.timeframe,
-      indicador: body.indicador,
+      timeframe: body.timeframe || '30',
+      indicador: body.indicador || 'VQ Pullback v1.8',
       direcao: body.direcao,
       preco_entrada: body.preco_entrada ? parseFloat(body.preco_entrada) : null,
       stop: body.stop ? parseFloat(body.stop) : null,
@@ -64,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     const typedAlert = alert as Alert;
 
-    // Dispatch Telegram message based on direcao
+    // Dispatch Telegram message
     let telegramOk = false;
     let telegramTipo: 'entrada' | 'saida' | 'scalp_realize' | 'scalp_stop' = 'entrada';
 
@@ -115,7 +188,7 @@ export async function POST(request: NextRequest) {
       await logTelegram(supabase, typedAlert.id, telegramTipo, 'error', errMsg);
     }
 
-    return NextResponse.json({ success: true, id: typedAlert.id });
+    return NextResponse.json({ success: true, type: 'entrada', id: typedAlert.id });
   } catch (error) {
     console.error('Webhook error:', error);
     return NextResponse.json(
