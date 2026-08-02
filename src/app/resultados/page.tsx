@@ -40,15 +40,30 @@ function formatPriceSmart(value: number): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return '—';
 
-  // Preserva as casas que o preço realmente tem: BTC fica "62.800,00" e GMT
-  // fica "0,01085". Arredondar tudo para 2 casas apagaria o preço das moedas
-  // baratas, que é justamente onde o spread mora.
-  // toFixed(8) evita a notação científica que toString() produz abaixo de 1e-6.
-  const casas = Math.max(2, n.toFixed(8).replace(/0+$/, '').split('.')[1]?.length ?? 2);
+  const abs = Math.abs(n);
+
+  // Precisão proporcional ao preço, como as exchanges fazem. Preservar as casas
+  // do número cru colocava "1.847,65554" ao lado de "1.873,89" na mesma linha:
+  // 5 casas num ativo de milhares é ruído, e 2 casas numa moeda de fração de
+  // centavo apagaria justamente onde o spread mora.
+  let casas: number;
+  if (abs >= 10) {
+    casas = 2;
+  } else if (abs >= 1) {
+    casas = 4;
+  } else {
+    // toFixed(8) evita a notação científica que toString() produz abaixo de 1e-6.
+    casas = n.toFixed(8).replace(/0+$/, '').split('.')[1]?.length ?? 2;
+  }
+
+  // Zeros à direita só poluem: 72,9700 vira 72,97, mas 1,00 continua 1,00.
+  const fixo = abs.toFixed(casas);
+  const semZeros = fixo.includes('.') ? fixo.replace(/0+$/, '').replace(/\.$/, '') : fixo;
+  const casasFinais = Math.max(2, semZeros.split('.')[1]?.length ?? 0);
 
   return n.toLocaleString('pt-BR', {
-    minimumFractionDigits: casas,
-    maximumFractionDigits: casas,
+    minimumFractionDigits: casasFinais,
+    maximumFractionDigits: casasFinais,
   });
 }
 
