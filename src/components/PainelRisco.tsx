@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { LEVERAGE } from '@/lib/calculations';
 import { CORRELACAO_BTC_ALTA } from '@/lib/types';
 
@@ -19,11 +20,20 @@ interface PainelRiscoProps {
 
 type Gravidade = 'critico' | 'atencao';
 
-interface Aviso {
+export interface Aviso {
   gravidade: Gravidade;
+  tipo: 'stop_liquidacao' | 'stop_apertado' | 'correlacao_btc' | 'concentracao_btc';
+  ativo: string | null;
   titulo: string;
   detalhe: string;
-  acao: string;
+  /**
+   * Consequência do cálculo, no indicativo — não no imperativo.
+   *
+   * "Use no máximo 14x" é recomendação de operação e enfraquece a posição da
+   * plataforma como ferramenta de análise. "Este stop só caberia até 14x"
+   * entrega a mesma informação acionável, mas quem decide é quem lê.
+   */
+  consequencia: string;
 }
 
 /**
@@ -58,17 +68,21 @@ export function montarAvisos(sinais: SinalAberto[], alavancagem: number): Aviso[
       const levMax = Math.max(1, Math.floor(100 / risco));
       avisos.push({
         gravidade: 'critico',
-        titulo: `${s.ativo}: o stop nunca vai ser acionado`,
-        detalhe: `O stop está a ${risco.toFixed(2)}% da entrada, mas em ${alavancagem}x a corretora liquida a posição em ${liquidacao.toFixed(2)}%. O preço zera sua margem antes de chegar lá.`,
-        acao: `Use no máximo ${levMax}x nesta operação — ou não entre nela.`,
+        tipo: 'stop_liquidacao',
+        ativo: s.ativo,
+        titulo: `${s.ativo}: o stop está além do ponto de liquidação`,
+        detalhe: `O stop está a ${risco.toFixed(2)}% da entrada, e em ${alavancagem}x a liquidação ocorre em ${liquidacao.toFixed(2)}%. O preço zera a margem antes de chegar ao stop.`,
+        consequencia: `Este stop só caberia em alavancagem de até ${levMax}x.`,
       });
     } else if (risco >= liquidacao * FOLGA_MINIMA) {
       const usado = (risco / liquidacao) * 100;
       avisos.push({
         gravidade: 'atencao',
-        titulo: `${s.ativo}: stop perto da liquidação`,
-        detalhe: `O stop consome ${usado.toFixed(0)}% da distância até a liquidação em ${alavancagem}x. Sobra pouca margem para taxas e oscilação.`,
-        acao: `Reduza para ${Math.max(1, Math.floor(100 / risco / 1.5))}x, ou entre com posição menor.`,
+        tipo: 'stop_apertado',
+        ativo: s.ativo,
+        titulo: `${s.ativo}: stop próximo do ponto de liquidação`,
+        detalhe: `O stop consome ${usado.toFixed(0)}% da distância até a liquidação em ${alavancagem}x, deixando pouca folga para taxas e oscilação.`,
+        consequencia: `Com folga de 50%, a alavancagem equivalente seria de até ${Math.max(1, Math.floor(100 / risco / 1.5))}x.`,
       });
     }
   }
@@ -80,17 +94,21 @@ export function montarAvisos(sinais: SinalAberto[], alavancagem: number): Aviso[
   if (colados.length >= 2) {
     avisos.push({
       gravidade: 'critico',
-      titulo: `${colados.length} posições abertas são a mesma aposta`,
-      detalhe: `${colados.map(s => s.ativo).join(', ')} estão com correlação acima de ${Math.round(CORRELACAO_BTC_ALTA * 100)}% com o BTC. Elas sobem e caem juntas.`,
-      acao: `Abra só uma delas, ou divida o tamanho entre as ${colados.length} — senão você está com ${colados.length}x o risco que imagina.`,
+      tipo: 'concentracao_btc',
+      ativo: null,
+      titulo: `${colados.length} posições abertas seguem o mesmo movimento`,
+      detalhe: `${colados.map(s => s.ativo).join(', ')} estão com correlação acima de ${Math.round(CORRELACAO_BTC_ALTA * 100)}% com o BTC, ou seja, tendem a subir e cair juntas.`,
+      consequencia: `Somadas, elas representam aproximadamente ${colados.length}x a exposição de uma única posição ao mesmo movimento.`,
     });
   } else if (colados.length === 1) {
     const s = colados[0];
     avisos.push({
       gravidade: 'atencao',
-      titulo: `${s.ativo} está seguindo o BTC`,
-      detalhe: `Correlação de ${Math.round((s.correlacao_btc ?? 0) * 100)}% nas últimas velas: o movimento dela é o do BTC.`,
-      acao: `Antes de entrar, olhe o gráfico do BTC — é ele que vai decidir esta operação.`,
+      tipo: 'correlacao_btc',
+      ativo: s.ativo,
+      titulo: `${s.ativo} está acompanhando o BTC`,
+      detalhe: `Correlação de ${Math.round((s.correlacao_btc ?? 0) * 100)}% nas últimas velas: o movimento deste ativo tem acompanhado o do BTC.`,
+      consequencia: `O comportamento do BTC tende a determinar o resultado desta posição.`,
     });
   }
 
@@ -101,6 +119,30 @@ export function montarAvisos(sinais: SinalAberto[], alavancagem: number): Aviso[
 export default function PainelRisco({ sinais, alavancagem = LEVERAGE }: PainelRiscoProps) {
   const abertos = sinais.length;
   const avisos = montarAvisos(sinais, alavancagem);
+
+  // Trilha de auditoria: registra o que de fato foi renderizado. A chave de
+  // deduplicação inclui os títulos, então mudança de conteúdo gera novo envio,
+  // mas um F5 no mesmo estado não repete a chamada.
+  const assinatura = avisos.map(a => `${a.tipo}:${a.ativo}`).join('|');
+  useEffect(() => {
+    if (avisos.length === 0) return;
+    fetch('/api/avisos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        avisos: avisos.map(a => ({
+          ativo: a.ativo,
+          tipo: a.tipo,
+          gravidade: a.gravidade,
+          titulo: a.titulo,
+          detalhe: `${a.detalhe} ${a.consequencia}`,
+          alavancagem,
+        })),
+      }),
+      // Falha aqui não pode quebrar a tela: a trilha é secundária ao uso.
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assinatura, alavancagem]);
 
   if (abertos === 0) return null;
 
@@ -122,6 +164,12 @@ export default function PainelRisco({ sinais, alavancagem = LEVERAGE }: PainelRi
             baterem alvo, stop ou virada — e só então aparecem em Resultados, com
             lucro e duração. Contas feitas em {alavancagem}x.
           </p>
+          {avisos.length > 0 && (
+            <p className="pr-isencao">
+              Os pontos abaixo são cálculos automáticos sobre os dados recebidos.
+              Não constituem recomendação de operação — a decisão é sua.
+            </p>
+          )}
         </div>
       </div>
 
@@ -134,7 +182,7 @@ export default function PainelRisco({ sinais, alavancagem = LEVERAGE }: PainelRi
                 <strong>{a.titulo}</strong>
               </div>
               <p className="pr-detalhe">{a.detalhe}</p>
-              <p className="pr-acao">→ {a.acao}</p>
+              <p className="pr-acao">→ {a.consequencia}</p>
             </li>
           ))}
         </ul>

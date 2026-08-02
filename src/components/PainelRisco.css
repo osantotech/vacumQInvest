@@ -144,3 +144,11 @@
   .pr-header { gap: 10px; }
   .pr-icone { width: 28px; height: 28px; font-size: 15px; }
 }
+
+/* Isenção: o painel calcula, não recomenda. */
+.pr-isencao {
+  margin: 8px 0 0 !important;
+  font-size: 11.5px !important;
+  font-style: italic;
+  color: #6E7681 !important;
+}

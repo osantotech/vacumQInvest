@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Sidebar from '@/components/Sidebar';
+import TermoAceite from '@/components/TermoAceite';
 
 interface UserData {
   name: string;
@@ -65,13 +66,15 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     return <>{children}</>;
   }
 
-  // Authenticated layout with sidebar
+  // Authenticated layout with sidebar.
+  // O termo envolve tudo: enquanto não houver aceite da versão vigente, nem a
+  // barra lateral nem o conteúdo aparecem.
   return (
-    <>
+    <TermoAceite>
       {!loading && user && <Sidebar user={user} />}
       <main className={!loading && user ? 'page-container' : ''}>
         {children}
       </main>
-    </>
+    </TermoAceite>
   );
 }
