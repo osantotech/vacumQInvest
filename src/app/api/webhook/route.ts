@@ -36,6 +36,23 @@ function parseCorrelacao(raw: string | undefined): number | null {
   return n;
 }
 
+/**
+ * GET — ping de aquecimento.
+ *
+ * Na Vercel cada rota é uma função separada que "dorme" sem uso, e acordá-la
+ * custa ~1,2s — tempo suficiente para o TradingView desistir de esperar e
+ * marcar o alerta como falha (mesmo que o dado seja gravado depois).
+ *
+ * Um agendador externo chama este GET de minuto em minuto para manter a função
+ * quente. Precisa devolver 200: agendadores desativam sozinhos os jobs que
+ * acumulam falhas, e um 401 recorrente mataria o próprio aquecimento.
+ *
+ * Não toca no banco, não lê segredo e não expõe nada — só prova que está de pé.
+ */
+export async function GET() {
+  return NextResponse.json({ status: 'ok', servico: 'webhook' });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: WebhookPayload = await request.json();
