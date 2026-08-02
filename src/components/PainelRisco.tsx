@@ -1,6 +1,6 @@
 'use client';
 
-import { LEVERAGE, LIQUIDATION_PCT } from '@/lib/calculations';
+import { LEVERAGE } from '@/lib/calculations';
 import { CORRELACAO_BTC_ALTA } from '@/lib/types';
 
 export interface SinalAberto {
