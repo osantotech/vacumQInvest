@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { LEVERAGE } from '@/lib/calculations';
 import { CORRELACAO_BTC_ALTA } from '@/lib/types';
 
@@ -9,20 +9,36 @@ export interface SinalAberto {
   direcao: string;
   preco_entrada: number | null;
   stop: number | null;
+  tp1: number | null;
   correlacao_btc: number | null;
 }
+
+/**
+ * ISOLADO: só a margem alocada sustenta a posição, e a liquidação ocorre a
+ * 100/alavancagem por cento do preço de entrada.
+ *
+ * CRUZADO: o saldo inteiro da conta sustenta a posição, e a liquidação depende
+ * de quanto saldo existe contra o tamanho aberto — números que a plataforma
+ * não tem. Assumir os 100/alavancagem aqui produz alarme falso: medido numa
+ * conta real, uma posição 20x cruzada liquidava a −74%, não a −5%.
+ */
+export type ModoMargem = 'isolado' | 'cruzado';
 
 interface PainelRiscoProps {
   sinais: SinalAberto[];
   /** Alavancagem de referência para a conta de liquidação. */
   alavancagem?: number;
+  /** Taxa de acerto histórica (%), para confrontar com o R:R exigido. */
+  winRateHistorico?: number | null;
+  /** Quantas operações sustentam esse win rate. */
+  amostraHistorico?: number;
 }
 
 type Gravidade = 'critico' | 'atencao';
 
 export interface Aviso {
   gravidade: Gravidade;
-  tipo: 'stop_liquidacao' | 'stop_apertado' | 'correlacao_btc' | 'concentracao_btc';
+  tipo: 'stop_liquidacao' | 'stop_apertado' | 'correlacao_btc' | 'concentracao_btc' | 'risco_retorno';
   ativo: string | null;
   titulo: string;
   detalhe: string;
@@ -42,9 +58,34 @@ export interface Aviso {
  */
 const FOLGA_MINIMA = 0.8;
 
+/**
+ * Amostra mínima para confrontar o R:R exigido com o histórico real. Abaixo
+ * disso o win rate é ruído: com 10 operações e 6 acertos, a taxa verdadeira
+ * está em algum lugar entre 31% e 83%.
+ */
+const AMOSTRA_MINIMA = 30;
+
 function pctRisco(s: SinalAberto): number | null {
   if (s.preco_entrada === null || s.stop === null || s.preco_entrada === 0) return null;
   return (Math.abs(s.preco_entrada - s.stop) / s.preco_entrada) * 100;
+}
+
+function pctGanho(s: SinalAberto): number | null {
+  if (s.preco_entrada === null || s.tp1 === null || s.preco_entrada === 0) return null;
+  const bruto = ((s.tp1 - s.preco_entrada) / s.preco_entrada) * 100;
+  // No SHORT o alvo fica abaixo da entrada: o ganho é a distância, não o sinal.
+  return s.direcao === 'SHORT' || s.direcao === 'SCALP_SHORT' ? -bruto : bruto;
+}
+
+/**
+ * Taxa de acerto que zera a conta neste risco/retorno.
+ *
+ * De `WR × ganho = (1 − WR) × risco` sai `WR = risco / (risco + ganho)`.
+ * É o número que decide se um setup se sustenta: arriscar 5% para ganhar 2,5%
+ * exige 67% de acerto, e nenhum sinal técnico entrega isso de forma estável.
+ */
+function winRateNecessario(risco: number, ganho: number): number {
+  return (risco / (risco + ganho)) * 100;
 }
 
 /**
@@ -54,13 +95,49 @@ function pctRisco(s: SinalAberto): number | null {
  * stop está a 6,76% não ajuda ninguém — saber que em 20x a corretora liquida
  * antes disso, e que o teto seguro é 14x, ajuda.
  */
-export function montarAvisos(sinais: SinalAberto[], alavancagem: number): Aviso[] {
+export function montarAvisos(
+  sinais: SinalAberto[],
+  alavancagem: number,
+  modo: ModoMargem = 'isolado',
+  winRateHistorico: number | null = null,
+  amostraHistorico: number = 0
+): Aviso[] {
   const avisos: Aviso[] = [];
   const liquidacao = 100 / alavancagem;
 
   for (const s of sinais) {
     const risco = pctRisco(s);
+    const ganho = pctGanho(s);
+
+    // ── Risco/retorno: vale nos dois modos de margem ──
+    // Um sinal pode estar tecnicamente perfeito e a operação perder dinheiro
+    // por construção. Nenhuma outra tela olha para isto.
+    if (risco !== null && ganho !== null && ganho > 0 && risco > 0) {
+      const wrExigido = winRateNecessario(risco, ganho);
+      const rr = ganho / risco;
+
+      if (rr < 1) {
+        const comparacao =
+          winRateHistorico !== null && amostraHistorico >= AMOSTRA_MINIMA
+            ? ` Seu histórico é de ${winRateHistorico.toFixed(1)}% em ${amostraHistorico} operações.`
+            : '';
+        avisos.push({
+          gravidade: rr < 0.6 ? 'critico' : 'atencao',
+          tipo: 'risco_retorno',
+          ativo: s.ativo,
+          titulo: `${s.ativo}: o alvo é menor que o risco`,
+          detalhe: `Risco de ${risco.toFixed(2)}% para um alvo de ${ganho.toFixed(2)}% — relação de 1 para ${rr.toFixed(2)}.${comparacao}`,
+          consequencia: `Nesta relação, seriam necessários ${wrExigido.toFixed(0)}% de acerto apenas para empatar.`,
+        });
+      }
+    }
+
     if (risco === null) continue;
+
+    // ── Distância até a liquidação: só faz sentido na margem isolada ──
+    // No cruzado o saldo inteiro sustenta a posição, e a plataforma não conhece
+    // esse saldo. Emitir o alerta aqui seria inventar um número.
+    if (modo === 'cruzado') continue;
 
     if (risco >= liquidacao) {
       // O teto teórico ignora taxas e margem de manutenção, então a liquidação
@@ -116,9 +193,32 @@ export function montarAvisos(sinais: SinalAberto[], alavancagem: number): Aviso[
   return avisos.sort((a, b) => (a.gravidade === b.gravidade ? 0 : a.gravidade === 'critico' ? -1 : 1));
 }
 
-export default function PainelRisco({ sinais, alavancagem = LEVERAGE }: PainelRiscoProps) {
+const CHAVE_MODO = 'vq:modo-margem';
+
+export default function PainelRisco({
+  sinais,
+  alavancagem = LEVERAGE,
+  winRateHistorico = null,
+  amostraHistorico = 0,
+}: PainelRiscoProps) {
   const abertos = sinais.length;
-  const avisos = montarAvisos(sinais, alavancagem);
+
+  // Preferência local: é ajuste de leitura da própria tela, não dado de
+  // negócio. Guardar no banco exigiria migration e rota para uma escolha que
+  // vale por navegador.
+  const [modo, setModo] = useState<ModoMargem>('isolado');
+
+  useEffect(() => {
+    const salvo = window.localStorage.getItem(CHAVE_MODO);
+    if (salvo === 'isolado' || salvo === 'cruzado') setModo(salvo);
+  }, []);
+
+  function trocarModo(novo: ModoMargem) {
+    setModo(novo);
+    window.localStorage.setItem(CHAVE_MODO, novo);
+  }
+
+  const avisos = montarAvisos(sinais, alavancagem, modo, winRateHistorico, amostraHistorico);
 
   // Trilha de auditoria: registra o que de fato foi renderizado. A chave de
   // deduplicação inclui os títulos, então mudança de conteúdo gera novo envio,
@@ -171,7 +271,33 @@ export default function PainelRisco({ sinais, alavancagem = LEVERAGE }: PainelRi
             </p>
           )}
         </div>
+
+        <div className="pr-modo">
+          <span className="pr-modo-label">Margem</span>
+          <div className="pr-modo-btns">
+            {(['isolado', 'cruzado'] as const).map(m => (
+              <button
+                key={m}
+                type="button"
+                className={modo === m ? 'ativo' : ''}
+                onClick={() => trocarModo(m)}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {modo === 'cruzado' && (
+        <p className="pr-modo-nota">
+          No modo cruzado o saldo inteiro da conta sustenta a posição, e a
+          liquidação depende de quanto saldo existe contra o tamanho aberto —
+          números que esta plataforma não conhece. Por isso os avisos de
+          proximidade da liquidação ficam desligados aqui: confira a distância
+          real na sua corretora.
+        </p>
+      )}
 
       {avisos.length > 0 && (
         <ul className="pr-lista">

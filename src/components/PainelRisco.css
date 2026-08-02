@@ -152,3 +152,60 @@
   font-style: italic;
   color: #6E7681 !important;
 }
+
+/* Modo de margem — muda o significado do cálculo, então fica ao lado dele */
+.pr-modo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.pr-modo-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #787B86;
+  text-align: right;
+}
+
+.pr-modo-btns {
+  display: flex;
+  gap: 3px;
+}
+
+.pr-modo-btns button {
+  width: auto;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+  background: #0B0E11;
+  border: 1px solid #2A2E39;
+  border-radius: 6px;
+  color: #787B86;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pr-modo-btns button:hover { color: #D1D4DC; border-color: #434651; }
+
+.pr-modo-btns button.ativo {
+  background: #2962FF;
+  border-color: #2962FF;
+  color: #FFFFFF;
+}
+
+.pr-modo-nota {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #90A4AE;
+  background: rgba(41, 98, 255, 0.06);
+  border-left: 3px solid #2962FF;
+  border-radius: 6px;
+  max-width: 85ch;
+}

@@ -16,7 +16,13 @@ interface AvisoRegistro {
   alavancagem?: number | null;
 }
 
-const TIPOS = ['stop_liquidacao', 'stop_apertado', 'correlacao_btc', 'concentracao_btc'];
+const TIPOS = [
+  'stop_liquidacao',
+  'stop_apertado',
+  'correlacao_btc',
+  'concentracao_btc',
+  'risco_retorno',
+];
 const GRAVIDADES = ['critico', 'atencao'];
 
 export async function POST(request: NextRequest) {

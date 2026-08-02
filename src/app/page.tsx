@@ -75,6 +75,7 @@ export default function Dashboard() {
               direcao: a.direcao,
               preco_entrada: a.preco_entrada === null ? null : Number(a.preco_entrada),
               stop: a.stop === null ? null : Number(a.stop),
+              tp1: a.tp1 === null || a.tp1 === undefined ? null : Number(a.tp1),
               correlacao_btc: a.correlacao_btc === null ? null : Number(a.correlacao_btc),
             }))
         );
@@ -244,7 +245,13 @@ export default function Dashboard() {
 
       {/* Ocupa o vazio abaixo dos cards e responde "o que faço com estes
           sinais?" — a tabela acima mostra o quê, esta seção mostra o e daí. */}
-      {!loading && <PainelRisco sinais={abertos} />}
+      {!loading && (
+        <PainelRisco
+          sinais={abertos}
+          winRateHistorico={stats?.win_rate ?? null}
+          amostraHistorico={stats?.com_resultado ?? 0}
+        />
+      )}
     </div>
   );
 }
