@@ -279,16 +279,26 @@
 /* Marca de "isto é BTC disfarçado". Dourado do bitcoin, discreto: é um aviso
    de risco a ser notado ao varrer a coluna, não um selo a ser celebrado. */
 .ra-btc {
-  width: auto;
-  padding: 0 2px;
-  font-size: 13px;
+  /* Disco dourado com o ₿ escuro dentro — o logo do Bitcoin, reconhecido de
+     relance mesmo em 17px. O texto solto em dourado se perdia entre as setas
+     coloridas da mesma coluna. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  flex-shrink: 0;
+  font-size: 11px;
   font-weight: 800;
   line-height: 1;
-  color: #F7931A;
-  background: transparent;
+  color: #12161F;
+  background: #F7931A;
   border: none;
+  border-radius: 50%;
   cursor: pointer;
-  /* Alvo de toque de 24px sem ocupar 24px de layout: a tabela é densa, mas o
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  /* Alvo de toque de ~30px sem ocupar 30px de layout: a tabela é densa, mas o
      dedo não encolhe. */
   position: relative;
 }
@@ -296,10 +306,13 @@
 .ra-btc::after {
   content: '';
   position: absolute;
-  inset: -8px -6px;
+  inset: -7px;
 }
 
-.ra-btc:hover { color: #FFB74D; }
+.ra-btc:hover {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 3px rgba(247, 147, 26, 0.25);
+}
 
 /* ── Aviso agregado de concentração ── */
 .ra-btc-aviso {
@@ -314,10 +327,17 @@
 }
 
 .ra-btc-aviso-icone {
-  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-size: 16px;
   font-weight: 800;
-  line-height: 1.2;
-  color: #F7931A;
+  line-height: 1;
+  color: #12161F;
+  background: #F7931A;
+  border-radius: 50%;
   flex-shrink: 0;
 }
 
@@ -371,9 +391,18 @@
 }
 
 .ra-btc-modal-icone {
-  font-size: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 19px;
   font-weight: 800;
-  color: #F7931A;
+  line-height: 1;
+  color: #12161F;
+  background: #F7931A;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .ra-btc-modal h3 {
