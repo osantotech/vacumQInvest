@@ -41,3 +41,6 @@ next-env.d.ts
 # DATABASE" e o padrão antigo ("Senha do Supabase*") não pegava o "nova".
 Senha*Supabase*
 .credenciais-locais*
+
+# backups do banco — dados operacionais, não versionar
+backups/
