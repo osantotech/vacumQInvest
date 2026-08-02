@@ -107,7 +107,8 @@ export interface DashboardStats {
   com_resultado: number;
   ganhos: number;
   stops: number;
-  win_rate: number;
+  /** null quando nenhuma operação fechou: não existe taxa de acerto sem amostra. */
+  win_rate: number | null;
   pnl_total_marg: number;
   melhor_ativo: string;
   alertas_hoje: number;

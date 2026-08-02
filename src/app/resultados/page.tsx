@@ -239,7 +239,9 @@ export default function Resultados() {
   const wins = computedRows.filter(r => r.pctResult > 0).length;
   // Breakeven exato não é stop — contá-lo como perda inflaria a coluna vermelha.
   const stops = computedRows.filter(r => r.pctResult < 0).length;
-  const winRate = totalOps > 0 ? (wins / totalOps) * 100 : 0;
+  // null, não 0: sem operação fechada não há taxa de acerto. "0,0%" na tela se
+  // lê como "errou todas", que é o oposto de "ainda não sei".
+  const winRate = totalOps > 0 ? (wins / totalOps) * 100 : null;
   const totalSpread = computedRows.reduce((sum, r) => sum + r.spreadLev, 0);
 
   return (
@@ -341,7 +343,9 @@ export default function Resultados() {
         </div>
         <div className="ra-stat-card">
           <div className="ra-stat-label">Win Rate</div>
-          <div className={`ra-stat-value ${winRate >= 50 ? 'green' : 'red'}`}>{winRate.toFixed(1)}%</div>
+          <div className={`ra-stat-value ${winRate === null ? '' : winRate >= 50 ? 'green' : 'red'}`}>
+            {winRate === null ? '—' : `${winRate.toFixed(1)}%`}
+          </div>
         </div>
         <div className="ra-stat-card">
           <div className="ra-stat-label">Ganhos / Stops</div>
@@ -353,8 +357,8 @@ export default function Resultados() {
         </div>
         <div className="ra-stat-card">
           <div className="ra-stat-label">P&L Acum. ({leverage}x)</div>
-          <div className={`ra-stat-value ${totalSpread >= 0 ? 'green' : 'red'}`}>
-            {totalSpread >= 0 ? '+' : ''}{formatBRL(totalSpread)}%
+          <div className={`ra-stat-value ${totalOps === 0 ? '' : totalSpread >= 0 ? 'green' : 'red'}`}>
+            {totalOps === 0 ? '—' : `${totalSpread >= 0 ? '+' : ''}${formatBRL(totalSpread)}%`}
           </div>
         </div>
       </div>

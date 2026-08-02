@@ -127,21 +127,34 @@ export default function Dashboard() {
       <div className="grid-stats">
         <StatsCard 
           icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>}
-          label="Total de Sinais" 
-          value={loading ? '...' : (stats?.total_alertas || 0)} 
-          color="accent" 
+          label="Total de Sinais"
+          value={loading ? '...' : (stats?.total_alertas || 0)}
+          amostra={loading ? undefined : `${stats?.com_resultado ?? 0} ${(stats?.com_resultado ?? 0) === 1 ? 'fechada' : 'fechadas'}`}
+          color="accent"
         />
         <StatsCard 
           icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.675v.192c0 .98-1.405 1.625-2.922 1.625h-3.156c-1.517 0-2.922-.645-2.922-1.625v-.192c0-.528.243-1.01.652-1.312l3.424-2.52c.28-.206.666-.206.945 0l3.424 2.52c.41.302.652.784.652 1.312zM12 11.25a3.375 3.375 0 100-6.75 3.375 3.375 0 000 6.75z" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.125c0-.98 1.405-1.625 2.922-1.625h.192c1.517 0 2.922.645 2.922 1.625v1.205c0 .528-.243 1.01-.652 1.312l-1.92 1.413c-.28.206-.666.206-.945 0l-1.92-1.413c-.41-.302-.652-.784-.652-1.312V7.125zM17.25 7.125c0-.98-1.405-1.625-2.922-1.625h-.192c-1.517 0-2.922.645-2.922 1.625v1.205c0 .528.243 1.01.652 1.312l1.92 1.413c.28.206.666.206.945 0l1.92-1.413c.41-.302.652-.784.652-1.312V7.125z" /></svg>}
-          label="Win Rate" 
-          value={loading ? '...' : `${stats?.win_rate?.toFixed(1) || 0}%`} 
-          color="green" 
+          label="Win Rate"
+          // Sem operação fechada não existe taxa: "—" diz "não sei", "0,0%"
+          // diria "errou todas". São coisas opostas.
+          value={loading ? '...' : stats?.win_rate === null || stats?.win_rate === undefined
+            ? '—'
+            : `${stats.win_rate.toFixed(1)}%`}
+          amostra={loading || !stats?.com_resultado
+            ? 'nenhuma operação fechada'
+            : `sobre ${stats.com_resultado} ${stats.com_resultado === 1 ? 'operação' : 'operações'}`}
+          color="green"
         />
         <StatsCard 
           icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" /></svg>}
-          label="P&L Margem (20x)" 
-          value={loading ? '...' : `${stats?.pnl_total_marg && stats.pnl_total_marg > 0 ? '+' : ''}${(stats?.pnl_total_marg || 0).toFixed(1)}%`} 
-          color={stats?.pnl_total_marg && stats.pnl_total_marg < 0 ? 'red' : 'green'} 
+          label="P&L Margem (20x)"
+          // Mesma regra do Win Rate: "+0,0%" com zero operações fecharia como
+          // se o resultado fosse neutro, quando na verdade não há resultado.
+          value={loading ? '...' : !stats?.com_resultado
+            ? '—'
+            : `${(stats.pnl_total_marg ?? 0) > 0 ? '+' : ''}${(stats.pnl_total_marg ?? 0).toFixed(1)}%`}
+          amostra={loading || !stats?.com_resultado ? undefined : 'soma das operações fechadas'}
+          color={stats?.pnl_total_marg && stats.pnl_total_marg < 0 ? 'red' : 'green'}
         />
         <StatsCard 
           icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>}

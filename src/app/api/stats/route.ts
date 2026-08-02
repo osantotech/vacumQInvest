@@ -37,7 +37,10 @@ export async function GET() {
     const comResultado = results.length;
     const ganhos = results.filter((r) => r.status !== 'STOP').length;
     const stops = results.filter((r) => r.status === 'STOP').length;
-    const winRate = comResultado > 0 ? (ganhos / comResultado) * 100 : 0;
+    // null, e não 0: sem operação fechada não existe taxa de acerto. Devolver
+    // zero fazia a tela estampar "0,0%", que se lê como "errou todas" — uma
+    // acusação falsa contra o indicador quando nada fechou ainda.
+    const winRate = comResultado > 0 ? (ganhos / comResultado) * 100 : null;
     const pnlTotalMarg = results.reduce(
       (sum, r) => sum + (r.resultado_marg ?? 0),
       0
@@ -92,7 +95,7 @@ export async function GET() {
       com_resultado: comResultado,
       ganhos,
       stops,
-      win_rate: Math.round(winRate * 10) / 10,
+      win_rate: winRate === null ? null : Math.round(winRate * 10) / 10,
       pnl_total_marg: Math.round(pnlTotalMarg * 10) / 10,
       melhor_ativo: melhorAtivo,
       alertas_hoje: alertasHoje ?? 0,
