@@ -92,7 +92,12 @@ export async function sendTelegramEntrada(alert: Alert): Promise<boolean> {
       : alert.confianca_nota ?? '—';
 
   const mercado = alert.mercado_nota ?? '—';
-  const via = alert.via_entrada ? `✅ Via ${alert.via_entrada.toUpperCase()} (rejeição da zona)` : '';
+  // "rejeição da zona" só descreve a entrada por FIBO. O VQ Pullback v1.8 manda
+  // ED, PBv e PPB-ec, que chegam pela PST — anexar a frase a elas seria mentira.
+  const viaTxt = alert.via_entrada?.toUpperCase() ?? '';
+  const via = viaTxt
+    ? `✅ Via ${viaTxt}${viaTxt.startsWith('FIBO') ? ' (rejeição da zona)' : ''}`
+    : '';
   const veredito = alert.veredito ? `💬 ${alert.veredito}` : '';
   const dateLine = `📅 ${formatDateTelegram(alert.created_at)}`;
 

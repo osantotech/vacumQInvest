@@ -34,3 +34,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# credenciais locais — nunca versionar
+*.local
+# Glob no meio de propósito: o arquivo real chama "Senha nova do Supabase -
+# DATABASE" e o padrão antigo ("Senha do Supabase*") não pegava o "nova".
+Senha*Supabase*
+.credenciais-locais*

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { timingSafeEqual } from 'crypto';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { analyzeVQPullback, type Kline, type VQSignal } from '@/lib/vqScanner';
 import { sendTelegramScanner } from '@/lib/telegram';
 
@@ -28,15 +29,30 @@ async function fetchBinanceKlines(symbol: string, interval: string): Promise<Kli
   }
 }
 
+/** Comparação em tempo constante do Bearer token do cron. */
+function cronSecretMatches(authHeader: string | null): boolean {
+  const expected = process.env.CRON_SECRET;
+  if (!expected || !authHeader) return false;
+  const a = Buffer.from(authHeader);
+  const b = Buffer.from(`Bearer ${expected}`);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 export async function GET(request: NextRequest) {
-  // Autenticação opcional: Vercel CRON_SECRET ou manual
-  const authHeader = request.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}` &&
-    !request.nextUrl.searchParams.has('manual')
-  ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Duas formas legítimas de entrar: o cron da Vercel (Bearer CRON_SECRET) ou
+  // um usuário logado disparando manualmente pelo dashboard.
+  //
+  // O `?manual` de antes era um bypass puro — qualquer requisição que
+  // acrescentasse esse parâmetro pulava a verificação do CRON_SECRET. Hoje o
+  // middleware barra o anônimo antes de chegar aqui, mas a rota não pode
+  // depender disso: agora ela exige sessão de verdade.
+  if (!cronSecretMatches(request.headers.get('authorization'))) {
+    const authClient = createClient();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
   const supabase = createServiceClient();

@@ -40,16 +40,23 @@ CREATE TABLE IF NOT EXISTS alerts (
   -- confirmation (VacumQ Grécia)
   via_entrada     text,
 
+  -- correlação com o BTC nas últimas N velas (-1 a 1) — ver migrations/002
+  correlacao_btc  numeric(6,4),
+
   -- origin
   origem          text DEFAULT 'webhook',
   webhook_raw     jsonb
 );
 
 -- 3. Results table
+-- NOTA (auditoria 01/08/2026): este bloco foi sincronizado com o banco REAL.
+-- As colunas `created_at` e `observacao` estavam declaradas aqui mas nunca
+-- foram aplicadas em produção — pedi-las no select/insert derrubava a query
+-- inteira (erro 42703). Se quiser reintroduzi-las, crie um arquivo em
+-- migrations/ e aplique de verdade antes de usar no código.
 CREATE TABLE IF NOT EXISTS results (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   alert_id        uuid REFERENCES alerts(id) ON DELETE CASCADE,
-  created_at      timestamptz DEFAULT now(),
 
   preco_saida     numeric(20,8) NOT NULL,
   data_saida      timestamptz NOT NULL,
@@ -59,7 +66,6 @@ CREATE TABLE IF NOT EXISTS results (
   resultado_marg  numeric(10,4),
 
   status          text NOT NULL,
-  observacao      text,
 
   telegram_sent   boolean DEFAULT false
 );

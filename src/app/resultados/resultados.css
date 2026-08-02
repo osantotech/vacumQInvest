@@ -94,6 +94,17 @@
   margin-bottom: 16px;
 }
 
+/* globals.css dá width:100% a todo input/select do app. Aqui isso quebrava o
+   flex e empilhava os 4 filtros em 4 linhas, gastando ~200px de altura antes
+   de a tabela começar. Não mexo na regra global para não afetar os
+   formulários das outras telas — sobrescrevo só aqui. */
+.ra-filter-select,
+.ra-filter-date {
+  width: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 .ra-filter-select {
   padding: 6px 12px;
   font-size: 12px;
@@ -171,7 +182,7 @@
 .ra-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -182,17 +193,21 @@
 }
 
 .ra-table thead th {
-  padding: 12px 14px;
-  font-size: 11px;
+  padding: 10px 9px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  /* O letter-spacing de 0.05em somava ~60px só nos cabeçalhos — o bastante
+     para empurrar a última coluna (Resultado 10.000) para fora da tela. */
+  letter-spacing: 0.02em;
   color: #787B86;
   background: #0B0E11;
   border-bottom: 2px solid #2A2E39;
-  text-align: center;
+  text-align: right;
 }
 
+/* Direção e ativo não são números: não alinham à direita. */
+.ra-table thead th:nth-child(1),
 .ra-table thead th:nth-child(3) {
   text-align: left;
 }
@@ -215,14 +230,24 @@
 }
 
 .ra-table tbody td {
-  padding: 10px 14px;
+  padding: 9px 9px;
   color: #D1D4DC;
-  text-align: center;
+  /* Números à direita: as casas decimais ficam na mesma coluna vertical e dá
+     para comparar magnitude correndo o olho, sem ler dígito por dígito. */
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
+.ra-table tbody td:nth-child(1),
 .ra-table tbody td:nth-child(3) {
   text-align: left;
+}
+
+/* Datas e duração: contexto, não valor. Ficam recuadas do conteúdo principal. */
+.ra-table .ra-date,
+.ra-table .ra-time {
+  font-size: 11px;
+  color: #787B86;
 }
 
 /* Direction Column */
@@ -250,6 +275,16 @@
 
 .ra-dir-arrow.long { color: #00E676; }
 .ra-dir-arrow.short { color: #FF5252; }
+
+/* Marca de "isto é BTC disfarçado". Dourado do bitcoin, discreto: é um aviso
+   de risco a ser notado ao varrer a coluna, não um selo a ser celebrado. */
+.ra-btc {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  color: #F7931A;
+  cursor: help;
+}
 
 /* Ativo + Copy */
 .ra-ativo {

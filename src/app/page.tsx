@@ -2,34 +2,71 @@
 
 import { useEffect, useState } from 'react';
 import StatsCard from '@/components/StatsCard';
-import DonutChart from '@/components/DonutChart';
+import EquityCurve, { type EquityPoint } from '@/components/EquityCurve';
 import StatusBadge from '@/components/StatusBadge';
-import { formatDateTimeBR } from '@/lib/calculations';
+import { calculateResultMarg, formatDateTimeBR } from '@/lib/calculations';
 import type { DashboardStats, AlertWithResult } from '@/lib/types';
+
+/**
+ * Transforma a lista de resultados na série acumulada da curva de capital.
+ *
+ * A API devolve do mais recente para o mais antigo; a curva precisa do inverso,
+ * senão o gráfico conta a história de trás para frente.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function montarCurva(rows: any[]): EquityPoint[] {
+  const cronologico = [...rows].sort(
+    (a, b) => new Date(a.data_saida).getTime() - new Date(b.data_saida).getTime()
+  );
+
+  let acumulado = 0;
+  return cronologico.map(r => {
+    const pct = Number(r.resultado_pct ?? 0);
+    // Cada operação entra com seu próprio teto de -100%: alavancar a soma no
+    // fim esconderia as liquidações individuais dentro da média.
+    acumulado += calculateResultMarg(Number.isFinite(pct) ? pct : 0);
+    return {
+      label: new Date(r.data_saida).toLocaleDateString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit',
+        month: '2-digit',
+      }),
+      value: acumulado,
+    };
+  });
+}
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentAlerts, setRecentAlerts] = useState<AlertWithResult[]>([]);
+  const [curva, setCurva] = useState<EquityPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [statsRes, alertsRes] = await Promise.all([
+        const [statsRes, alertsRes, resultsRes] = await Promise.all([
           fetch('/api/stats'),
-          fetch('/api/alerts?limit=5')
+          fetch('/api/alerts?limit=5'),
+          fetch('/api/results?limit=500'),
         ]);
-        
+
         if (!statsRes.ok || !alertsRes.ok) {
           throw new Error('Erro ao buscar dados do dashboard');
         }
-        
+
         const statsData = await statsRes.json();
         const alertsData = await alertsRes.json();
-        
+
         setStats(statsData);
         setRecentAlerts(alertsData.data || []);
+
+        // A curva é secundária: se ela falhar, o dashboard ainda serve.
+        if (resultsRes.ok) {
+          const resultsData = await resultsRes.json();
+          setCurva(montarCurva(resultsData.data || []));
+        }
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -99,20 +136,30 @@ export default function Dashboard() {
 
       <div className="grid-2">
         <div className="card">
-          <div className="card-header">
-            <h2>Resultados Acumulados</h2>
+          <div className="card-header" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px' }}>
+            <h2>Curva de Capital</h2>
+            {!loading && curva.length > 0 && (
+              <span
+                style={{
+                  fontSize: '20px',
+                  fontWeight: 800,
+                  fontVariantNumeric: 'tabular-nums',
+                  color: curva[curva.length - 1].value >= 0 ? '#00E676' : '#FF5252',
+                }}
+              >
+                {curva[curva.length - 1].value >= 0 ? '+' : ''}
+                {curva[curva.length - 1].value.toLocaleString('pt-BR', {
+                  minimumFractionDigits: 1,
+                  maximumFractionDigits: 1,
+                })}%
+              </span>
+            )}
           </div>
-          <div className="card-body flex justify-center items-center h-64">
+          <div className="card-body">
             {loading ? (
-              <div className="skeleton w-full h-full rounded-full max-w-[200px] max-h-[200px]"></div>
+              <div className="skeleton w-full rounded" style={{ height: '260px' }}></div>
             ) : (
-              <DonutChart 
-                data={[
-                  { label: 'Com Lucro', value: stats?.ganhos || 0, color: '#26a69a' },
-                  { label: 'Fazer 3X', value: stats?.tres_x_count || 0, color: '#2962ff' },
-                  { label: 'Stop', value: stats?.stops || 0, color: '#ef5350' }
-                ]}
-              />
+              <EquityCurve points={curva} />
             )}
           </div>
         </div>

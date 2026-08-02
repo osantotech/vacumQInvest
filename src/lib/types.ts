@@ -14,7 +14,12 @@ export type DirecaoType =
 
 export type ConfiancaNota = 'A+' | 'A' | 'B' | 'C' | 'D';
 export type MercadoNota = 'FORTE' | 'OK' | 'FRACO';
-export type ViaEntrada = 'FIBO' | 'FORÇA' | null;
+/**
+ * FIBO/FORÇA vêm do Modo Grécia v1.5; ED/PBv/PPB-ec vêm do VQ Pullback v1.8.
+ * O campo é gravado como texto livre — este tipo documenta o que chega hoje,
+ * não restringe o que a API aceita.
+ */
+export type ViaEntrada = 'FIBO' | 'FORÇA' | 'ED' | 'PBv' | 'PPB-ec' | null;
 export type Origem = 'webhook' | 'manual';
 export type ResultStatus = 'TP1' | 'TP2' | 'TP3' | 'STOP' | 'MANUAL' | '3X';
 export type TelegramTipo = 'entrada' | 'saida' | 'scalp_realize' | 'scalp_stop';
@@ -37,25 +42,36 @@ export interface Alert {
   mercado_nota: MercadoNota | null;
   veredito: string | null;
   via_entrada: string | null;
+  /**
+   * Correlação com o BTC nas últimas N velas (-1 a 1), medida pelo indicador.
+   * NULL no próprio BTC ou quando a medição está desligada.
+   */
+  correlacao_btc: number | null;
   origem: Origem;
   webhook_raw: Record<string, unknown> | null;
 }
+
+/** A partir daqui o sinal deixa de ser independente: é o BTC com outro nome. */
+export const CORRELACAO_BTC_ALTA = 0.85;
 
 export interface AlertWithResult extends Alert {
   result: Result | null;
 }
 
+/**
+ * Espelha as colunas que a tabela `results` realmente tem no Supabase.
+ * `created_at` e `observacao` foram declaradas aqui um dia, mas não existem
+ * no banco — pedi-las no select derrubava a query inteira (42703).
+ */
 export interface Result {
   id: string;
   alert_id: string;
-  created_at: string;
   preco_saida: number;
   data_saida: string;
   duracao_minutos: number | null;
   resultado_pct: number | null;
   resultado_marg: number | null;
   status: ResultStatus;
-  observacao: string | null;
   telegram_sent: boolean;
 }
 
@@ -117,6 +133,7 @@ export interface WebhookPayload {
   confianca_score?: string;
   mercado_nota?: string;
   veredito?: string;
+  correlacao_btc?: string;
 }
 
 export interface ResultPayload {
@@ -124,7 +141,6 @@ export interface ResultPayload {
   preco_saida: number;
   data_saida: string;
   status: ResultStatus;
-  observacao?: string;
 }
 
 export interface ThreeXPayload {

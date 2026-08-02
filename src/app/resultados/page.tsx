@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { formatDuration } from '@/lib/calculations';
+import {
+  calculateResultMargAt,
+  formatDateTimeFullBR,
+  formatDurationBetween,
+} from '@/lib/calculations';
+import { CORRELACAO_BTC_ALTA } from '@/lib/types';
 import './resultados.css';
 
 // ============================================================
@@ -15,6 +20,7 @@ interface AlertData {
   indicador: string;
   direcao: string;
   preco_entrada: number;
+  correlacao_btc: number | null;
 }
 
 interface ResultRow {
@@ -22,6 +28,7 @@ interface ResultRow {
   preco_saida: number;
   data_saida: string;
   duracao_minutos: number | null;
+  resultado_pct: number | null;
   status: string;
   alert: AlertData;
 }
@@ -29,23 +36,20 @@ interface ResultRow {
 // ============================================================
 // Helpers
 // ============================================================
-function formatDateTimeBR(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }) + ' ' + d.toLocaleTimeString('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-}
-
 function formatPriceSmart(value: number): string {
-  return Number(value).toString();
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+
+  // Preserva as casas que o preço realmente tem: BTC fica "62.800,00" e GMT
+  // fica "0,01085". Arredondar tudo para 2 casas apagaria o preço das moedas
+  // baratas, que é justamente onde o spread mora.
+  // toFixed(8) evita a notação científica que toString() produz abaixo de 1e-6.
+  const casas = Math.max(2, n.toFixed(8).replace(/0+$/, '').split('.')[1]?.length ?? 2);
+
+  return n.toLocaleString('pt-BR', {
+    minimumFractionDigits: casas,
+    maximumFractionDigits: casas,
+  });
 }
 
 function formatBRL(value: number): string {
@@ -64,6 +68,15 @@ function formatCapitalHeader(value: number): string {
 
 function isLongDir(dir: string): boolean {
   return dir === 'LONG' || dir === 'SCALP_LONG';
+}
+
+/**
+ * Acima do limiar, a moeda está apenas repetindo o BTC. O ícone ₿ é um aviso
+ * de concentração: várias linhas marcadas ao mesmo tempo significam que o que
+ * parece uma carteira diversificada é uma só aposta, multiplicada.
+ */
+function seguiuBtc(correlacao: number | null): boolean {
+  return correlacao !== null && correlacao >= CORRELACAO_BTC_ALTA;
 }
 
 // ============================================================
@@ -106,9 +119,21 @@ export default function Resultados() {
         preco_saida: Number(r.preco_saida),
         data_saida: r.data_saida,
         duracao_minutos: r.duracao_minutos,
+        resultado_pct: r.resultado_pct === null || r.resultado_pct === undefined
+          ? null
+          : Number(r.resultado_pct),
         status: r.status,
         alert: r.alerts || r.alert,
-      })).filter((r: ResultRow) => r.alert);
+      })).filter((r: ResultRow) => r.alert)
+        .map((r: ResultRow) => ({
+          ...r,
+          alert: {
+            ...r.alert,
+            correlacao_btc: r.alert.correlacao_btc === null || r.alert.correlacao_btc === undefined
+              ? null
+              : Number(r.alert.correlacao_btc),
+          },
+        }));
 
       setResults(rows);
     } catch (err: unknown) {
@@ -165,24 +190,30 @@ export default function Resultados() {
     const exit = Number(r.preco_saida);
     const long = isLongDir(r.alert.direcao);
 
-    const pctResult = entry > 0
+    // Recalculado no cliente de propósito: a alavancagem é escolhida na tela,
+    // então `resultado_marg` do banco (sempre 20x) não serve. O `resultado_pct`
+    // do banco vale como fonte da verdade quando existe — só cai no cálculo
+    // local se o registro for antigo e não tiver a coluna preenchida.
+    const pctResult = r.resultado_pct ?? (entry > 0
       ? (long
           ? ((exit - entry) / entry) * 100
           : ((entry - exit) / entry) * 100)
-      : 0;
+      : 0);
 
-    const spreadLev = pctResult * leverage;
-    const res1 = capital1 * (1 + (pctResult / 100) * leverage);
-    const res2 = capital2 * (1 + (pctResult / 100) * leverage);
-    const dur = r.duracao_minutos ?? 0;
+    // Sem o teto, uma queda de 6% em 20x exibiria -120%: uma perda maior que
+    // a margem inteira, que a corretora nunca deixaria acontecer.
+    const spreadLev = calculateResultMargAt(pctResult, leverage);
+    const res1 = capital1 * (1 + spreadLev / 100);
+    const res2 = capital2 * (1 + spreadLev / 100);
 
-    return { ...r, pctResult, spreadLev, res1, res2, dur };
+    return { ...r, pctResult, spreadLev, res1, res2 };
   });
 
   // Summary stats
   const totalOps = computedRows.length;
   const wins = computedRows.filter(r => r.pctResult > 0).length;
-  const stops = computedRows.filter(r => r.pctResult <= 0).length;
+  // Breakeven exato não é stop — contá-lo como perda inflaria a coluna vermelha.
+  const stops = computedRows.filter(r => r.pctResult < 0).length;
   const winRate = totalOps > 0 ? (wins / totalOps) * 100 : 0;
   const totalSpread = computedRows.reduce((sum, r) => sum + r.spreadLev, 0);
 
@@ -194,9 +225,8 @@ export default function Resultados() {
         <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#D1D4DC', textTransform: 'uppercase', letterSpacing: '0.02em', margin: 0 }}>
           RESULTADOS DE ALERTAS
         </h1>
-        <p style={{ fontSize: '13px', color: '#787B86', marginTop: '4px' }}>
-          {totalOps} operações · WR {winRate.toFixed(1)}%
-        </p>
+        {/* O subtítulo dizia "N operações · WR X%" — os dois primeiros cards
+            logo abaixo repetem exatamente isso. */}
       </div>
 
       {/* Controls Bar */}
@@ -347,10 +377,18 @@ export default function Resultados() {
                 const long = isLongDir(row.alert.direcao);
                 return (
                   <tr key={row.id}>
-                    {/* Col 1: Direction */}
+                    {/* Col 1: Direção + aviso de correlação com o BTC */}
                     <td>
                       <div className="ra-dir">
                         <span className={`ra-dir-dot ${long ? 'long' : 'short'}`}></span>
+                        {seguiuBtc(row.alert.correlacao_btc) && (
+                          <span
+                            className="ra-btc"
+                            title={`Correlação ${Math.round((row.alert.correlacao_btc ?? 0) * 100)}% com o BTC — este sinal não é independente. Se o BTC virar, ele vira junto.`}
+                          >
+                            ₿
+                          </span>
+                        )}
                         <span className={`ra-dir-arrow ${long ? 'long' : 'short'}`}>
                           {long ? '↑' : '↓'}
                         </span>
@@ -358,19 +396,14 @@ export default function Resultados() {
                     </td>
 
                     {/* Col 2: Data Alerta */}
-                    <td style={{ fontSize: '12px', color: '#787B86' }}>
-                      {formatDateTimeBR(row.alert.created_at)}
+                    <td className="ra-date">
+                      {formatDateTimeFullBR(row.alert.created_at)}
                     </td>
 
-                    {/* Col 3: Nome do Ativo + Timeframe */}
+                    {/* Col 3: Nome do Ativo */}
                     <td>
                       <div className="ra-ativo">
                         <span className="ra-ativo-name">{row.alert.ativo}</span>
-                        {row.alert.timeframe && (
-                          <span style={{ fontSize: '11px', fontWeight: 600, color: '#787B86', background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: '4px' }}>
-                            {row.alert.timeframe.endsWith('m') || row.alert.timeframe.endsWith('h') ? row.alert.timeframe : `${row.alert.timeframe}m`}
-                          </span>
-                        )}
                         <button
                           className={`ra-copy-btn ${copiedId === row.id ? 'copied' : ''}`}
                           onClick={() => handleCopy(row.alert.ativo, row.id)}
@@ -387,8 +420,8 @@ export default function Resultados() {
                     </td>
 
                     {/* Col 5: Data Resultado */}
-                    <td style={{ fontSize: '12px', color: '#787B86' }}>
-                      {formatDateTimeBR(row.data_saida)}
+                    <td className="ra-date">
+                      {formatDateTimeFullBR(row.data_saida)}
                     </td>
 
                     {/* Col 6: Preço Resultado */}
@@ -406,19 +439,19 @@ export default function Resultados() {
                       {formatBRL(row.spreadLev)}%
                     </td>
 
-                    {/* Col 9: Tempo */}
-                    <td style={{ color: '#787B86' }}>
-                      {row.dur > 0 ? formatDuration(row.dur) : '—'}
+                    {/* Col 9: Tempo — a subtração das colunas 5 e 2 desta linha */}
+                    <td className="ra-time">
+                      {formatDurationBetween(row.alert.created_at, row.data_saida)}
                     </td>
 
                     {/* Col 10: Resultado Capital 1 */}
                     <td className={`ra-bold ra-hide-mobile ${row.res1 >= capital1 ? 'ra-green' : 'ra-red'}`}>
-                      ${formatBRL(row.res1)}
+                      {formatBRL(row.res1)}
                     </td>
 
                     {/* Col 11: Resultado Capital 2 */}
                     <td className={`ra-bold ra-hide-mobile ${row.res2 >= capital2 ? 'ra-green' : 'ra-red'}`}>
-                      ${formatBRL(row.res2)}
+                      {formatBRL(row.res2)}
                     </td>
                   </tr>
                 );
@@ -436,10 +469,10 @@ export default function Resultados() {
                 </td>
                 <td></td>
                 <td className={`ra-hide-mobile ${computedRows.reduce((s, r) => s + r.res1, 0) >= capital1 * totalOps ? 'ra-green' : 'ra-red'}`} style={{ fontWeight: 800 }}>
-                  ${formatBRL(computedRows.reduce((s, r) => s + (r.res1 - capital1), 0))}
+                  {formatBRL(computedRows.reduce((s, r) => s + (r.res1 - capital1), 0))}
                 </td>
                 <td className={`ra-hide-mobile ${computedRows.reduce((s, r) => s + r.res2, 0) >= capital2 * totalOps ? 'ra-green' : 'ra-red'}`} style={{ fontWeight: 800 }}>
-                  ${formatBRL(computedRows.reduce((s, r) => s + (r.res2 - capital2), 0))}
+                  {formatBRL(computedRows.reduce((s, r) => s + (r.res2 - capital2), 0))}
                 </td>
               </tr>
             </tfoot>

@@ -1,0 +1,922 @@
+//@version=5
+indicator("VQ Pullback v1.8", "VQ_PB v1.8", overlay=true, max_labels_count=500, max_lines_count=200, max_boxes_count=20)
+
+// ══════════════════════════════════════════════════════════════════════════
+// INDICADOR 5 — VQ Pullback v1.8
+// ──────────────────────────────────────────────────────────────────────────
+// Detecta rompimentos da Pivot SuperTrend, rastreia pullbacks,
+// sinaliza Fim do Pullback e Pos Pullback.
+//
+// Baseado na imersao do Bruno Aguiar e nas sacadas do Sandro.
+// Validado com 9 prints da operacao DUSKUSDT 30m 04-06 Maio '26.
+//
+// Ciclo: ROMPIMENTO -> PULLBACK -> FIM PB -> POS PB -> SEGURE -> FLIP
+//
+// ── HISTORICO ──
+// v1.0 a v1.7: ver notas ao fim do arquivo (motor PST, maquina de estados,
+//   score, PBv/PPB-ec/ED, balizador, enfraquecimento, linha de entrada).
+// v1.8: QUATRO camadas de CONTEXTO (nenhuma cria gatilho de entrada — a
+//   entrada continua sendo ED/PBv/PPB-ec da PST). Tudo com toggle e limpo.
+//   (1) IMPULSO AUTO + FIBONACCI/OTE: detecta o swing dominante por pivo
+//       (os "dois pontos" nas pontas), ancora o Fibonacci, desenha a zona
+//       OTE 0.618-0.786 e os alvos (-0.27 / -0.62). Aplica a REGUA DO BRUNO:
+//       so vale com REJEICAO confirmada na zona; rompeu a 0.786 = setup morto.
+//   (2) AVISO DE SAIDA (topo menor / fundo maior): a essencia do CHoCH na
+//       linguagem do Bruno. LONG: um topo menor que o anterior = avaliar saida.
+//       SHORT: um fundo maior que o anterior = avaliar saida.
+//   (3) RELOGIO DE SESSAO (Asia/Londres/NY) no fuso do BRASIL (UTC-3):
+//       verde = mercado aberto, vermelho = fechado. Ricos opera Asia.
+//   (4) ESTATISTICAS EMBUTIDAS: backtest simples que mede, por ciclo de
+//       rompimento, se andou ate Alvo1/2/3 ou bateu stop. Reaproveita o
+//       'spread' ja calculado. Modelo simplificado para CALIBRAR — validar
+//       contra o diario, nao e promessa de resultado real.
+// ══════════════════════════════════════════════════════════════════════════
+
+
+// ── INPUTS ──────────────────────────────────────────────────────────────
+
+grpPST = "══ Pivot SuperTrend ══"
+int pstPivot = input.int(2, "Periodo do Pivo", minval=1, group=grpPST)
+float pstFactor = input.float(3.0, "Fator ATR", minval=0.5, step=0.5, group=grpPST)
+int pstAtr = input.int(10, "Periodo ATR", minval=1, group=grpPST)
+
+grpSMA = "══ SMAs ══"
+int smaWLen = input.int(8, "SMA Branca (rapida)", minval=2, group=grpSMA)
+int smaYLen = input.int(21, "SMA Amarela (tendencia)", minval=2, group=grpSMA)
+int sma200Len = input.int(200, "SMA 200 (parede)", minval=50, group=grpSMA)
+
+grpVol = "══ Volume ══"
+int volAvgLen = input.int(14, "Media de volume (candles)", minval=5, group=grpVol)
+float vol5xMul = input.float(5.0, "Reversao: volume >= Nx anterior", minval=2.0, step=0.5, group=grpVol, tooltip="Bruno: 'quando o volume contrario e 5 vezes, e reversao'")
+float volConfMul = input.float(1.5, "Confirmacao: volume > Nx media", minval=1.0, step=0.1, group=grpVol)
+
+grpOp = "══ Operacao ══"
+float leverage = input.float(20, "Alavancagem (para calculo ROE)", minval=1, step=5, group=grpOp)
+int fiboLB = input.int(20, "Lookback Fibonacci interno (score)", minval=5, group=grpOp)
+int bodyLB = input.int(14, "Lookback corpo medio", minval=5, group=grpOp)
+
+grpImp = "══ Impulso & OTE (Fibonacci auto) ══"
+bool showFib = input.bool(true, "Mostrar Fibonacci do impulso + OTE", group=grpImp)
+int impPiv = input.int(5, "Forca do pivo do impulso", minval=2, group=grpImp, tooltip="Maior = pega swings maiores (menos ruido). Menor = mais sensivel. Confirma impPiv candles depois do topo/fundo (nao repinta).")
+float oteA = input.float(0.618, "OTE inicio (retracao)", minval=0.5, maxval=0.7, step=0.001, group=grpImp)
+float oteB = input.float(0.786, "OTE fim / invalidacao (Bruno: passou = morto)", minval=0.7, maxval=0.9, step=0.001, group=grpImp)
+bool showImpLine = input.bool(true, "Mostrar linha do impulso (2 pontos nas pontas)", group=grpImp)
+bool showTPext = input.bool(true, "Mostrar alvos (extensoes -0.27 / -0.62)", group=grpImp)
+bool showOteMark = input.bool(true, "Marcar rejeicao na OTE (contexto, NAO e entrada)", group=grpImp)
+
+grpExit = "══ Aviso de Saida (topo menor / fundo maior) ══"
+bool showExit = input.bool(true, "Avisar topo menor (LONG) / fundo maior (SHORT)", group=grpExit, tooltip="Bruno: 'um topo menor que o anterior sinaliza saida; um fundo maior que o anterior sinaliza saida'. E aviso — a saida e sua.")
+
+grpSess = "══ Relogio de Sessao (fuso BR / UTC-3) ══"
+bool showSess = input.bool(true, "Mostrar relogio de sessao", group=grpSess)
+string sessAsia = input.session("2100-0600", "Asia (Toquio)", group=grpSess)
+string sessLond = input.session("0400-1300", "Londres", group=grpSess)
+string sessNY = input.session("1000-1800", "Nova York", group=grpSess)
+string sessPos = input.string("Direita Superior", "Posicao do relogio", options=["Direita Superior", "Direita Inferior", "Esquerda Superior", "Esquerda Inferior"], group=grpSess)
+
+grpStats = "══ Estatisticas (backtest embutido — CALIBRACAO) ══"
+bool showStats = input.bool(true, "Mostrar estatisticas", group=grpStats)
+float stStop = input.float(1.5, "Stop (% de spread adverso)", minval=0.1, step=0.1, group=grpStats)
+float stTP1 = input.float(2.0, "Alvo 1 (% de spread)", minval=0.1, step=0.1, group=grpStats)
+float stTP2 = input.float(4.0, "Alvo 2 (% de spread)", minval=0.1, step=0.1, group=grpStats)
+float stTP3 = input.float(8.0, "Alvo 3 (% de spread)", minval=0.1, step=0.1, group=grpStats)
+bool stBEmove = input.bool(true, "Mover stop para zero apos Alvo 1", group=grpStats)
+string statsPos = input.string("Esquerda Inferior", "Posicao das estatisticas", options=["Direita Superior", "Direita Inferior", "Esquerda Superior", "Esquerda Inferior"], group=grpStats)
+
+grpExib = "══ Exibicao ══"
+bool showPST = input.bool(false, "Mostrar linha PST (use OFF se ja tem a PST do Bruno)", group=grpExib)
+bool showSMAs = input.bool(false, "Mostrar SMAs B&A (desative se ES_B&A na tela)", group=grpExib)
+bool show200 = input.bool(true, "Mostrar SMA 200", group=grpExib)
+bool showEntryLine = input.bool(true, "Linha do preco de entrada (para medir spread)", group=grpExib, tooltip="Marca o preco exato (close) de onde o spread e calculado. Meca daqui para bater com o painel.")
+bool showPanel = input.bool(true, "Painel principal", group=grpExib)
+string panelPos = input.string("Direita Inferior", "Posicao do painel principal", options=["Direita Superior", "Direita Inferior", "Esquerda Superior", "Esquerda Inferior"], group=grpExib)
+string panelSize = input.string("WEB", "Tamanho do painel", options=["WEB", "Celular"], group=grpExib)
+
+
+// ── SMAs ────────────────────────────────────────────────────────────────
+
+float smaW = ta.sma(close, smaWLen)
+float smaY = ta.sma(close, smaYLen)
+float sma200 = ta.sma(close, sma200Len)
+
+plot(showSMAs ? smaW : na, "SMA Branca", color.white, 2)
+plot(showSMAs ? smaY : na, "SMA Amarela", color.yellow, 2)
+plot(show200 ? sma200 : na, "SMA 200", #E040FB, 1)
+
+
+// ── VOLUME ──────────────────────────────────────────────────────────────
+
+float volAvg = ta.sma(volume, volAvgLen)
+float avgBody = ta.sma(math.abs(close - open), bodyLB)
+bool isBull = close > open
+bool isBear = close < open
+bool corpoForte = not na(avgBody) and math.abs(close - open) > avgBody * 1.2   // v1.8: definido cedo (usado tambem na rejeicao OTE)
+
+var float lastBullVol = na
+var float lastBearVol = na
+if isBull
+    lastBullVol := volume
+if isBear
+    lastBearVol := volume
+
+// Regra 5x do Bruno
+bool vol5xBull = isBull and not na(lastBearVol) and lastBearVol > 0 and volume >= vol5xMul * lastBearVol
+bool vol5xBear = isBear and not na(lastBullVol) and lastBullVol > 0 and volume >= vol5xMul * lastBullVol
+
+
+// ── PIVOT SUPERTREND (algoritmo real LonesomeTheBlue) ───────────────────
+
+float ph = ta.pivothigh(pstPivot, pstPivot)
+float pl = ta.pivotlow(pstPivot, pstPivot)
+
+var float centerPST = na
+float lastpp = not na(ph) ? ph : not na(pl) ? pl : na
+if not na(lastpp)
+    centerPST := na(centerPST) ? lastpp : (centerPST * 2 + lastpp) / 3
+
+float atrPST = ta.atr(pstAtr)
+float up = not na(centerPST) ? centerPST - pstFactor * atrPST : na
+float dn = not na(centerPST) ? centerPST + pstFactor * atrPST : na
+
+var float tUp = na
+var float tDn = na
+var int pstDir = 1
+
+tUp := na(up) ? nz(tUp[1]) : (na(tUp[1]) ? up : (close[1] > tUp[1] ? math.max(up, tUp[1]) : up))
+tDn := na(dn) ? nz(tDn[1]) : (na(tDn[1]) ? dn : (close[1] < tDn[1] ? math.min(dn, tDn[1]) : dn))
+
+pstDir := close > nz(tDn[1]) ? 1 : close < nz(tUp[1]) ? -1 : nz(pstDir[1], 1)
+
+float pstLine = pstDir == 1 ? tUp : tDn
+color pstCol = pstDir == 1 ? color.new(#00E676, 30) : color.new(#FF1744, 30)
+plot(showPST ? pstLine : na, "PST", pstCol, 2, style=plot.style_linebr)
+
+bool pstFlipLong = pstDir == 1 and nz(pstDir[1]) == -1
+bool pstFlipShort = pstDir == -1 and nz(pstDir[1]) == 1
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// v1.8 — IMPULSO AUTOMATICO + FIBONACCI / OTE  (camada de CONTEXTO)
+// ══════════════════════════════════════════════════════════════════════════
+// Detecta o swing dominante por pivo (impPiv candles de cada lado). A perna
+// vai do topo ao fundo (ou vice-versa) mais recentes. Ancoragem do Fibonacci:
+//   IMPULSO ALTA (impDir=+1): 0 no topo (fim), 1 no fundo (inicio).
+//     preco(L) = topo - L*range.  OTE 0.618-0.786 fica ABAIXO. Alvos ACIMA.
+//   IMPULSO BAIXA (impDir=-1): 0 no fundo (fim), 1 no topo (inicio).
+//     preco(L) = fundo + L*range.  OTE 0.618-0.786 fica ACIMA. Alvos ABAIXO.
+// NAO gera entrada — so marca a zona e aplica a regua do Bruno (rejeicao +
+// morte na 0.786). A entrada continua sendo ED/PBv/PPB-ec.
+
+float iph = ta.pivothigh(impPiv, impPiv)
+float ipl = ta.pivotlow(impPiv, impPiv)
+
+var float swHigh = na
+var int swHighBar = na
+var float swLow = na
+var int swLowBar = na
+var float prevPH = na
+var int prevPHBar = na
+var float prevPL = na
+var int prevPLBar = na
+
+if not na(iph)
+    prevPH := swHigh
+    prevPHBar := swHighBar
+    swHigh := iph
+    swHighBar := bar_index - impPiv
+if not na(ipl)
+    prevPL := swLow
+    prevPLBar := swLowBar
+    swLow := ipl
+    swLowBar := bar_index - impPiv
+
+// v1.8.1: DIRECAO DO IMPULSO ALINHADA A TENDENCIA LOCAL (branca vs amarela).
+// Assim o Fibonacci/OTE/alvos ficam SEMPRE do lado da sua operacao:
+//   branca >= amarela (alta)  -> impulso de ALTA  -> OTE abaixo, alvos acima (LONG)
+//   branca <  amarela (baixa) -> impulso de BAIXA -> OTE acima,  alvos abaixo (SHORT)
+int impDir = 0
+if not na(smaW) and not na(smaY)
+    impDir := smaW >= smaY ? 1 : -1
+
+// Selecao dos pontos do impulso conforme a direcao. Quando o pivo mais recente
+// e do lado "errado" para a perna desejada, usa o pivo anterior.
+float useHi = na
+float useLo = na
+int useHiBar = na
+int useLoBar = na
+if impDir == -1
+    // impulso de queda: fim = fundo recente; inicio = topo ANTES desse fundo
+    useLo := swLow
+    useLoBar := swLowBar
+    bool hiAntes = not na(swHighBar) and not na(swLowBar) and swHighBar < swLowBar
+    useHi := hiAntes ? swHigh : prevPH
+    useHiBar := hiAntes ? swHighBar : prevPHBar
+if impDir == 1
+    // impulso de alta: fim = topo recente; inicio = fundo ANTES desse topo
+    useHi := swHigh
+    useHiBar := swHighBar
+    bool loAntes = not na(swLowBar) and not na(swHighBar) and swLowBar < swHighBar
+    useLo := loAntes ? swLow : prevPL
+    useLoBar := loAntes ? swLowBar : prevPLBar
+
+float rng = (not na(useHi) and not na(useLo) and useHi > useLo) ? (useHi - useLo) : na
+
+// Precos dos niveis (single-line ternaries)
+float fp0 = impDir == 1 ? useHi : impDir == -1 ? useLo : na
+float fp1 = impDir == 1 ? useLo : impDir == -1 ? useHi : na
+float fp382 = impDir == 1 ? useHi - 0.382 * rng : impDir == -1 ? useLo + 0.382 * rng : na
+float fp5 = impDir == 1 ? useHi - 0.5 * rng : impDir == -1 ? useLo + 0.5 * rng : na
+float fpA = impDir == 1 ? useHi - oteA * rng : impDir == -1 ? useLo + oteA * rng : na
+float fp705 = impDir == 1 ? useHi - 0.705 * rng : impDir == -1 ? useLo + 0.705 * rng : na
+float fpB = impDir == 1 ? useHi - oteB * rng : impDir == -1 ? useLo + oteB * rng : na
+float fpN27 = impDir == 1 ? useHi + 0.27 * rng : impDir == -1 ? useLo - 0.27 * rng : na
+float fpN62 = impDir == 1 ? useHi + 0.62 * rng : impDir == -1 ? useLo - 0.62 * rng : na
+
+// Limites da OTE em preco
+float oteUp = (not na(fpA) and not na(fpB)) ? math.max(fpA, fpB) : na
+float oteDn = (not na(fpA) and not na(fpB)) ? math.min(fpA, fpB) : na
+
+// Estado da OTE (regua do Bruno)
+bool inOTE = not na(rng) and impDir != 0 and close <= oteUp and close >= oteDn
+bool rejLong = impDir == 1 and not na(fpA) and low <= fpA and close > fpA and isBull and corpoForte
+bool rejShort = impDir == -1 and not na(fpA) and high >= fpA and close < fpA and isBear and corpoForte
+bool oteDead = impDir == 1 ? (not na(fpB) and close < fpB) : impDir == -1 ? (not na(fpB) and close > fpB) : false
+
+bool newPiv = (not na(iph)) or (not na(ipl))
+
+var bool oteRej = false
+if newPiv
+    oteRej := false
+if rejLong or rejShort
+    oteRej := true
+
+
+// ── FIBONACCI: desenho (delete+recreate por perna; extend.right) ─────────
+
+f_hl(int x1, float y, color col, int w, string st) => line.new(x1, y, x1 + 1, y, xloc=xloc.bar_index, color=col, width=w, style=st, extend=extend.right)
+f_lb(int x, float y, string txt, color col) => label.new(x, y, txt, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_left, color=color.new(#0B0E11, 8), textcolor=col, size=size.small)
+
+var line[] fibLines = array.new_line()
+var label[] fibLabs = array.new_label()
+var box oteBox = na
+var line impLine = na
+var label impA = na
+var label impB = na
+
+if showFib and barstate.islast and not na(rng) and impDir != 0
+    for ln in fibLines
+        line.delete(ln)
+    array.clear(fibLines)
+    for lb in fibLabs
+        label.delete(lb)
+    array.clear(fibLabs)
+    box.delete(oteBox)
+    line.delete(impLine)
+    label.delete(impA)
+    label.delete(impB)
+
+    int xStart = impDir == 1 ? useLoBar : useHiBar
+    int xEnd = impDir == 1 ? useHiBar : useLoBar
+    color cGray = color.new(color.gray, 40)
+    color cGold = color.new(#FFB300, 10)
+    color cRed = color.new(#FF1744, 10)
+    color cGreen = color.new(#00E676, 20)
+    color tGray = #B0BEC5
+    color tGold = #FFC107
+    color tRed = #FF5252
+    color tGreen = #69F0AE
+
+    array.push(fibLines, f_hl(xStart, fp0, cGray, 1, line.style_solid))
+    array.push(fibLines, f_hl(xStart, fp382, cGray, 1, line.style_dotted))
+    array.push(fibLines, f_hl(xStart, fp5, cGray, 1, line.style_dotted))
+    array.push(fibLines, f_hl(xStart, fpA, cGold, 1, line.style_solid))
+    array.push(fibLines, f_hl(xStart, fp705, cGold, 1, line.style_dotted))
+    array.push(fibLines, f_hl(xStart, fpB, cRed, 1, line.style_solid))
+    array.push(fibLines, f_hl(xStart, fp1, cGray, 1, line.style_solid))
+
+    array.push(fibLabs, f_lb(bar_index + 2, fp0, "0 (" + str.tostring(fp0, format.mintick) + ")", tGray))
+    array.push(fibLabs, f_lb(bar_index + 2, fpA, str.tostring(oteA) + " (" + str.tostring(fpA, format.mintick) + ")", tGold))
+    array.push(fibLabs, f_lb(bar_index + 2, fp705, "0.705 (" + str.tostring(fp705, format.mintick) + ")", tGold))
+    array.push(fibLabs, f_lb(bar_index + 2, fpB, str.tostring(oteB) + " (" + str.tostring(fpB, format.mintick) + ") morte", tRed))
+    array.push(fibLabs, f_lb(bar_index + 2, fp1, "1 (" + str.tostring(fp1, format.mintick) + ")", tGray))
+
+    if showTPext
+        array.push(fibLines, f_hl(xStart, fpN27, cGreen, 1, line.style_dotted))
+        array.push(fibLines, f_hl(xStart, fpN62, cGreen, 1, line.style_dotted))
+        array.push(fibLabs, f_lb(bar_index + 2, fpN27, "-0.27 (" + str.tostring(fpN27, format.mintick) + ") alvo", tGreen))
+        array.push(fibLabs, f_lb(bar_index + 2, fpN62, "-0.62 (" + str.tostring(fpN62, format.mintick) + ") alvo", tGreen))
+
+    oteBox := box.new(xStart, oteUp, bar_index, oteDn, border_color=color.new(#FFB300, 60), bgcolor=color.new(#FFB300, 88))
+
+    if showImpLine
+        float yStart = impDir == 1 ? useLo : useHi
+        float yEnd = impDir == 1 ? useHi : useLo
+        color cImp = impDir == 1 ? color.new(#00E676, 0) : color.new(#FF1744, 0)
+        impLine := line.new(xStart, yStart, xEnd, yEnd, xloc=xloc.bar_index, color=color.new(color.gray, 30), width=1, style=line.style_dashed)
+        impA := label.new(xStart, yStart, "●", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_center, color=color.new(color.black, 100), textcolor=cImp, size=size.small)
+        impB := label.new(xEnd, yEnd, "●", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_center, color=color.new(color.black, 100), textcolor=cImp, size=size.small)
+
+// (Fibonacci/OTE desenhado no bloco acima, apenas na ultima barra: labels ja
+//  nascem em bar_index+2 e o box ja fecha em bar_index a cada tick — sempre atual)
+
+
+// ── MAQUINA DE ESTADOS ──────────────────────────────────────────────────
+// pos:   0=FORA, 1=LONG, -1=SHORT
+// phase: 0=NONE, 1=ROMPIMENTO, 2=PULLBACK, 3=FIM_PB, 4=POS_PB
+
+var int pos = 0
+var int phase = 0
+var float brkPrice = 0.0
+var float brkHigh = 0.0
+var float brkLow = 0.0
+var float pbLow = 0.0
+var float pbHigh = 0.0
+var int brkBar = 0
+var float swingBase = 0.0
+var bool dirEntry = false
+var int pbScore = 0
+var bool pbHad5x = false
+var float pbRefHigh = na
+var float pbRefLow = na
+var line entryLine = na
+
+// ── FLIP para LONG ──
+if pstFlipLong and pos != 1
+    pos := 1
+    phase := 1
+    brkPrice := close
+    brkHigh := high
+    brkLow := low
+    brkBar := bar_index
+    swingBase := ta.lowest(low, fiboLB)
+    pbLow := low
+    dirEntry := false
+    pbScore := 0
+    pbHad5x := false
+    pbRefHigh := na
+    pbRefLow := na
+    if showEntryLine
+        line.delete(entryLine)
+        entryLine := line.new(bar_index, close, bar_index + 1, close, color=color.new(#00E676, 40), width=1, style=line.style_dotted, extend=extend.none)
+
+// ── FLIP para SHORT ──
+if pstFlipShort and pos != -1
+    pos := -1
+    phase := 1
+    brkPrice := close
+    brkHigh := high
+    brkLow := low
+    brkBar := bar_index
+    swingBase := ta.highest(high, fiboLB)
+    pbHigh := high
+    dirEntry := false
+    pbScore := 0
+    pbHad5x := false
+    pbRefHigh := na
+    pbRefLow := na
+    if showEntryLine
+        line.delete(entryLine)
+        entryLine := line.new(bar_index, close, bar_index + 1, close, color=color.new(#FF1744, 40), width=1, style=line.style_dotted, extend=extend.none)
+
+if showEntryLine and not na(entryLine) and pos != 0
+    line.set_x2(entryLine, bar_index)
+
+
+// ── RASTREIO DE EXTREMOS ────────────────────────────────────────────────
+
+if pos == 1
+    brkHigh := math.max(brkHigh, high)
+if pos == -1
+    brkLow := math.min(brkLow, low)
+
+
+// ── TRANSICOES DE FASE — LONG ───────────────────────────────────────────
+
+if pos == 1 and phase == 1
+    if close < brkPrice
+        phase := 2
+        pbLow := low
+        pbRefHigh := brkHigh
+    else if bar_index - brkBar >= 2 and close > brkPrice and not dirEntry
+        dirEntry := true
+
+if pos == 1 and phase == 2
+    pbLow := math.min(pbLow, low)
+    if vol5xBull
+        pbHad5x := true
+    float fiboTop = pbRefHigh
+    float fiboBase = swingBase
+    float fRange = fiboTop - fiboBase
+    float fZoneHi = fiboTop - fRange * 0.382
+    float fZoneLo = fiboTop - fRange * 0.618
+    bool f1 = pbHad5x
+    bool f2 = volume < volAvg * 0.5 and volume[1] < volAvg * 0.5
+    bool f3 = fRange > 0 and low <= fZoneHi and low >= fZoneLo
+    bool f4 = not na(smaY) and low <= smaY and close > smaY
+    bool f5 = isBull and not na(avgBody) and math.abs(close - open) > avgBody * 1.5
+    int sc = (f1 ? 1 : 0) + (f2 ? 1 : 0) + (f3 ? 1 : 0) + (f4 ? 1 : 0) + (f5 ? 1 : 0)
+    pbScore := sc
+    if sc >= 3
+        phase := 3
+
+if pos == 1 and phase == 3 and not na(pbRefHigh) and close > pbRefHigh and volume > volAvg
+    phase := 4
+
+
+// ── TRANSICOES DE FASE — SHORT ──────────────────────────────────────────
+
+if pos == -1 and phase == 1
+    if close > brkPrice
+        phase := 2
+        pbHigh := high
+        pbRefLow := brkLow
+    else if bar_index - brkBar >= 2 and close < brkPrice and not dirEntry
+        dirEntry := true
+
+if pos == -1 and phase == 2
+    pbHigh := math.max(pbHigh, high)
+    if vol5xBear
+        pbHad5x := true
+    float fiboBot = pbRefLow
+    float fiboTop2 = swingBase
+    float fRange2 = fiboTop2 - fiboBot
+    float fZoneLo2 = fiboBot + fRange2 * 0.382
+    float fZoneHi2 = fiboBot + fRange2 * 0.618
+    bool s1 = pbHad5x
+    bool s2 = volume < volAvg * 0.5 and volume[1] < volAvg * 0.5
+    bool s3 = fRange2 > 0 and high >= fZoneLo2 and high <= fZoneHi2
+    bool s4 = not na(smaY) and high >= smaY and close < smaY
+    bool s5 = isBear and not na(avgBody) and math.abs(close - open) > avgBody * 1.5
+    int scs = (s1 ? 1 : 0) + (s2 ? 1 : 0) + (s3 ? 1 : 0) + (s4 ? 1 : 0) + (s5 ? 1 : 0)
+    pbScore := scs
+    if scs >= 3
+        phase := 3
+
+if pos == -1 and phase == 3 and not na(pbRefLow) and close < pbRefLow and volume > volAvg
+    phase := 4
+
+
+// ── BALIZADORES DE PERMANENCIA ──────────────────────────────────────────
+
+bool balizOK = false
+if pos == 1
+    balizOK := not na(smaW) and not na(smaY) and smaW > smaY
+if pos == -1
+    balizOK := not na(smaW) and not na(smaY) and smaW < smaY
+
+
+// ── ENFRAQUECIMENTO (v1.6) ──────────────────────────────────────────────
+
+bool enfraquecendo = false
+if pos == 1 and not na(smaW)
+    enfraquecendo := close < smaW
+if pos == -1 and not na(smaW)
+    enfraquecendo := close > smaW
+
+
+// ── QUALIDADE DO POS PULLBACK (Sandro) ──────────────────────────────────
+
+int posPBqual = 0
+if phase == 4 and pos == 1 and not na(smaW) and not na(smaY)
+    posPBqual := close > smaW and smaW > smaY ? 3 : close > smaW ? 2 : 1
+if phase == 4 and pos == -1 and not na(smaW) and not na(smaY)
+    posPBqual := close < smaW and smaW < smaY ? 3 : close < smaW ? 2 : 1
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// v1.8 — AVISO DE SAIDA: topo menor (LONG) / fundo maior (SHORT)
+// ══════════════════════════════════════════════════════════════════════════
+// Bruno: "um topo menor que o anterior sinaliza saida; um fundo maior que o
+// anterior sinaliza saida". Usa os pivos do impulso. E AVISO, nao ordem.
+
+bool topoMenor = showExit and pos == 1 and not na(iph) and not na(prevPH) and iph < prevPH
+bool fundoMaior = showExit and pos == -1 and not na(ipl) and not na(prevPL) and ipl > prevPL
+
+var bool exitWarn = false
+if pstFlipLong or pstFlipShort
+    exitWarn := false
+if topoMenor or fundoMaior
+    exitWarn := true
+
+
+// ── SPREAD E ROE ────────────────────────────────────────────────────────
+
+float spread = 0.0
+if pos == 1 and brkPrice > 0
+    spread := (close - brkPrice) / brkPrice * 100
+if pos == -1 and brkPrice > 0
+    spread := (brkPrice - close) / brkPrice * 100
+
+float roe = spread * leverage
+
+float distAma = not na(smaY) ? math.abs(close - smaY) / close * 100 : 0.0
+float distPST = not na(pstLine) ? math.abs(close - pstLine) / close * 100 : 0.0
+float dist200 = not na(sma200) ? (close - sma200) / close * 100 : 0.0
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// v1.8 — ESTATISTICAS EMBUTIDAS (backtest simples por ciclo de rompimento)
+// ══════════════════════════════════════════════════════════════════════════
+// Abre uma "operacao virtual" a cada FLIP (rompimento). Mede o 'spread' ate
+// bater Alvo1/2/3 ou o stop. Apos o Alvo1, o stop vira zero (breakeven, como
+// o Bruno). Fecha por: Alvo3, stop, breakeven (pos-Alvo1), ou novo flip.
+// Classifica pela FASE MAIS ALTA atingida (maxFav). MODELO SIMPLIFICADO —
+// serve para CALIBRAR, validar contra o diario; nao e resultado real.
+
+var int stTotal = 0
+var int stWins = 0
+var int stStops = 0
+var int stBEc = 0
+var int stT1 = 0
+var int stT2 = 0
+var int stT3 = 0
+var int stLong = 0
+var int stShort = 0
+var int stLongW = 0
+var int stShortW = 0
+var bool tradeActive = false
+var float tradeMaxFav = 0.0
+var int tradeDir = 0
+var bool tradeBE = false
+
+bool flippedNow = pstFlipLong or pstFlipShort
+int resKind = 0   // 0=nada, 1=win, 2=stop, 3=breakeven
+
+if tradeActive and not flippedNow
+    tradeMaxFav := math.max(tradeMaxFav, spread)
+    if stBEmove and not tradeBE and tradeMaxFav >= stTP1
+        tradeBE := true
+    if tradeMaxFav >= stTP3
+        resKind := 1
+    else if tradeBE and spread <= 0
+        resKind := 1
+    else if (not tradeBE) and spread <= (-1 * stStop)
+        resKind := 2
+
+if flippedNow and tradeActive
+    resKind := tradeMaxFav >= stTP1 ? 1 : 3
+
+if resKind != 0
+    stTotal += 1
+    int lvl = tradeMaxFav >= stTP3 ? 3 : tradeMaxFav >= stTP2 ? 2 : tradeMaxFav >= stTP1 ? 1 : 0
+    if lvl == 3
+        stT3 += 1
+    else if lvl == 2
+        stT2 += 1
+    else if lvl == 1
+        stT1 += 1
+    if resKind == 1
+        stWins += 1
+        if tradeDir == 1
+            stLongW += 1
+        else if tradeDir == -1
+            stShortW += 1
+    else if resKind == 2
+        stStops += 1
+    else
+        stBEc += 1
+    if tradeDir == 1
+        stLong += 1
+    else if tradeDir == -1
+        stShort += 1
+    tradeActive := false
+
+if flippedNow
+    tradeActive := true
+    tradeDir := pos
+    tradeMaxFav := 0.0
+    tradeBE := false
+
+float winRate = stTotal > 0 ? 100.0 * stWins / stTotal : na
+
+
+// ── SINAIS NO GRAFICO ───────────────────────────────────────────────────
+
+// PST Flip = entrada principal
+plotshape(pstFlipLong, "LONG ▲", shape.triangleup, location.belowbar, color.new(#00E676, 0), size=size.large)
+plotshape(pstFlipShort, "SHORT ▼", shape.triangledown, location.abovebar, color.new(#FF1744, 0), size=size.large)
+
+// Volume 5x FILTRADO — so em pullback (phase 2) + corpo forte
+bool diamBull = vol5xBull and phase == 2 and corpoForte
+bool diamBear = vol5xBear and phase == 2 and corpoForte
+plotshape(diamBull, "5x BULL ◆", shape.diamond, location.belowbar, color.new(#FFA726, 0), size=size.tiny)
+plotshape(diamBear, "5x BEAR ◆", shape.diamond, location.abovebar, color.new(#FFA726, 0), size=size.tiny)
+
+// INICIO do pullback (• pequeno)
+bool pbStartLong = pos == 1 and phase == 2 and phase[1] == 1
+bool pbStartShort = pos == -1 and phase == 2 and phase[1] == 1
+plotshape(pbStartLong, "Inicio PB Long", shape.circle, location.abovebar, color.new(#FF7043, 20), text="PB", textcolor=color.new(#FF7043, 0), size=size.tiny)
+plotshape(pbStartShort, "Inicio PB Short", shape.circle, location.belowbar, color.new(#FF7043, 20), text="PB", textcolor=color.new(#FF7043, 0), size=size.tiny)
+
+// ENTRADA DIRETA (ED)
+bool dirEntryLong = dirEntry and not dirEntry[1] and pos == 1
+bool dirEntryShort = dirEntry and not dirEntry[1] and pos == -1
+plotshape(dirEntryLong, "ED Direta Long", shape.labelup, location.belowbar, color.new(#26C6DA, 0), text="ED", textcolor=color.white, size=size.small)
+plotshape(dirEntryShort, "ED Direta Short", shape.labeldown, location.abovebar, color.new(#26C6DA, 0), text="ED", textcolor=color.white, size=size.small)
+
+// PBv = PullBack de virada (agressiva)
+bool fimPBsignal = phase == 3 and phase[1] == 2
+plotshape(fimPBsignal and pos == 1, "PBv Virada Long", shape.labeldown, location.abovebar, color.new(#00BCD4, 0), text="PBv", textcolor=color.white, size=size.small)
+plotshape(fimPBsignal and pos == -1, "PBv Virada Short", shape.labelup, location.belowbar, color.new(#00BCD4, 0), text="PBv", textcolor=color.white, size=size.small)
+
+// PPB-ec = Pos-PullBack Entrada confirmada (segura)
+bool posPBsignal = phase == 4 and phase[1] != 4
+color posPBcol = posPBqual == 3 ? color.new(#76FF03, 0) : posPBqual == 2 ? color.new(#B2FF59, 0) : color.new(#CDDC39, 0)
+plotshape(posPBsignal and pos == 1, "PPB-ec Long", shape.labelup, location.belowbar, color=posPBcol, text="PPB-ec", textcolor=color.black, size=size.small)
+plotshape(posPBsignal and pos == -1, "PPB-ec Short", shape.labeldown, location.abovebar, color=posPBcol, text="PPB-ec", textcolor=color.black, size=size.small)
+
+// v1.8: rejeicao na OTE (CONTEXTO, nao entrada) — simbolo distinto, discreto
+plotshape(showOteMark and rejLong, "OTE rejeicao Long", shape.xcross, location.belowbar, color.new(#FFB300, 0), size=size.tiny)
+plotshape(showOteMark and rejShort, "OTE rejeicao Short", shape.xcross, location.abovebar, color.new(#FFB300, 0), size=size.tiny)
+
+// v1.8: aviso de saida (topo menor / fundo maior)
+plotshape(topoMenor, "Topo menor", shape.triangledown, location.abovebar, color.new(#FF9100, 0), text="TM", textcolor=color.new(#FF9100, 0), size=size.tiny)
+plotshape(fundoMaior, "Fundo maior", shape.triangleup, location.belowbar, color.new(#FF9100, 0), text="FM", textcolor=color.new(#FF9100, 0), size=size.tiny)
+
+
+// ── ALERTAS ─────────────────────────────────────────────────────────────
+
+alertcondition(pstFlipLong, "PST Flip LONG", "VQ PB: PST virou LONG")
+alertcondition(pstFlipShort, "PST Flip SHORT", "VQ PB: PST virou SHORT")
+alertcondition(vol5xBull, "Volume 5x BULL", "VQ PB: Volume 5x reversao BULL")
+alertcondition(vol5xBear, "Volume 5x BEAR", "VQ PB: Volume 5x reversao BEAR")
+alertcondition(fimPBsignal, "PBv (PullBack de virada)", "VQ PB: PBv — virada do pullback (agressiva)")
+alertcondition(posPBsignal, "PPB-ec (Pos-PullBack confirmada)", "VQ PB: PPB-ec — rompeu topo anterior (segura)")
+alertcondition(dirEntryLong or dirEntryShort, "ED (Entrada Direta)", "VQ PB: ED — rompeu direto sem pullback (volume confirma)")
+alertcondition(enfraquecendo and not enfraquecendo[1], "Enfraquecimento", "VQ PB: posicao enfraquecendo — preco rompeu a branca ao contrario")
+alertcondition(rejLong or rejShort, "Rejeicao OTE", "VQ PB: rejeicao confirmada na OTE (contexto — valide sua entrada)")
+alertcondition(topoMenor or fundoMaior, "Aviso de saida", "VQ PB: topo menor / fundo maior — avaliar saida")
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// WEBHOOK VacumQInvest — alimenta a tela RESULTADOS DE ALERTAS
+// ══════════════════════════════════════════════════════════════════════════
+// Os alertcondition acima mandam TEXTO. A rota /api/webhook faz request.json()
+// na primeira linha, entao texto puro devolve HTTP 500 e nada e gravado — foi
+// isso que aconteceu com os alertas criados ate agora. alert() aceita string
+// montada em runtime, entao o preco, o stop e os alvos reais entram no JSON.
+//
+// UM ALERTA POR MOEDA cobre entrada E saida: como e o script que decide o
+// conteudo, basta criar o alerta com condicao "Any alert() function call".
+//
+// MODELO (uma operacao por ciclo de PST):
+//   ENTRADA  = o PRIMEIRO sinal do ciclo (ED, PBv ou PPB-ec). Os sinais
+//              seguintes do mesmo ciclo sao ignorados — senao um ciclo viraria
+//              tres linhas na tela e a saida so fecharia uma delas.
+//   STOP     = a linha PST (o stop estrutural do metodo).
+//   ALVOS    = as extensoes do Fibonacci do impulso (-0.27 e -0.62).
+//   SAIDA    = alvo -0.62 atingido, stop PST rompido, ou flip contrario.
+// ══════════════════════════════════════════════════════════════════════════
+
+grpWH = "══ Webhook VacumQInvest ══"
+// ATENCAO: o secret fica visivel em Configuracoes -> Inputs. Nao publique o
+// script na biblioteca publica do TradingView com este campo preenchido.
+string vqSecret = input.string("", "Webhook secret", group=grpWH)
+bool vqEnviar = input.bool(true, "Enviar sinais para o dashboard", group=grpWH)
+bool vqUsarED = input.bool(true, "Aceitar ED (entrada direta, sem pullback)", group=grpWH, tooltip="ED rompe sem pullback, entao nao tem Score (0/5). Desligue se voce so opera entradas com pullback confirmado.")
+bool vqCorrOn = input.bool(true, "Medir correlacao com o BTC", group=grpWH, tooltip="Mede o quanto esta moeda esta andando junto com o BTC. Correlacao alta NAO e qualidade: significa que o sinal nao e independente — se o BTC virar, todas as posicoes correlacionadas morrem juntas.")
+int vqCorrLen = input.int(50, "Velas para a correlacao", minval=10, maxval=500, group=grpWH)
+
+// A watchlist usa perpetuos (DASHUSDT.P), mas o banco e a API da Binance usam
+// DASHUSDT. Normalizar aqui evita o mesmo ativo virar duas linhas na tela.
+string vqAtivo = str.replace_all(syminfo.ticker, ".P", "")
+
+// Campo numerico do JSON: manda null (sem aspas) quando o valor nao existe.
+// "NaN" viraria parseFloat(NaN) e o insert quebraria na coluna numeric.
+vqN(v) => na(v) ? "null" : '"' + str.tostring(v, format.mintick) + '"'
+
+// Correlacao vai de -1 a 1: format.mintick (a casa decimal do simbolo) daria
+// "0" em moedas de 2 casas e jogaria a informacao fora.
+vqC(v) => na(v) ? "null" : '"' + str.tostring(v, "#.####") + '"'
+
+// ── CORRELACAO COM O BTC ──
+// request.security precisa ficar no escopo global (nunca dentro de if).
+// Uma unica chamada externa — nao chega perto de nenhum limite do Pine.
+float vqBtcClose = request.security("BINANCE:BTCUSDT.P", timeframe.period, close)
+
+// O BTC contra ele mesmo da 1.0 sempre, o que so poluiria a tela.
+bool vqEhBtc = str.startswith(vqAtivo, "BTCUSDT")
+float vqCorrBtc = (vqCorrOn and not vqEhBtc and not na(vqBtcClose)) ? ta.correlation(close, vqBtcClose, vqCorrLen) : na
+
+var bool vqAberta = false    // ja mandei entrada e ainda nao mandei a saida
+var bool vqUsado = false     // este ciclo de PST ja gerou sua operacao
+var int vqDir = 0
+var float vqA1 = na
+var float vqA2 = na
+var bool vqA1Hit = false
+
+bool vqFlip = pstFlipLong or pstFlipShort
+
+// ── SAIDA (avaliada antes da entrada: no flip, fecha o ciclo velho primeiro) ──
+if vqEnviar and vqAberta
+    bool vqStopHit = not na(pstLine) and (vqDir == 1 ? low <= pstLine : high >= pstLine)
+    bool vqA2Hit = not na(vqA2) and (vqDir == 1 ? high >= vqA2 : low <= vqA2)
+    if not na(vqA1) and not vqA1Hit and (vqDir == 1 ? high >= vqA1 : low <= vqA1)
+        vqA1Hit := true
+
+    float vqSaida = na
+    string vqSt = ""
+    if vqA2Hit
+        vqSaida := vqA2
+        vqSt := "TP2"
+    else if vqStopHit
+        // Se o alvo -0.27 ja tinha sido atingido, o preco andou a favor antes de
+        // voltar: e realizacao parcial, nao stop. Marcar STOP aqui pintaria de
+        // vermelho uma operacao que passou pelo lucro.
+        vqSaida := pstLine
+        vqSt := vqA1Hit ? "TP1" : "STOP"
+    else if vqFlip
+        vqSaida := close
+        vqSt := vqA1Hit ? "TP1" : "MANUAL"
+
+    if not na(vqSaida)
+        alert('{"secret":"' + vqSecret + '","tipo":"saida","ativo":"' + vqAtivo + '","preco_saida":' + vqN(vqSaida) + ',"status":"' + vqSt + '"}', alert.freq_once_per_bar_close)
+        vqAberta := false
+
+// O flip abre um ciclo novo — so aqui a trava de "uma operacao por ciclo" cai.
+if vqFlip
+    vqUsado := false
+    vqA1Hit := false
+
+// ── ENTRADA ──
+bool vqSinalPBv = fimPBsignal
+bool vqSinalPPB = posPBsignal
+bool vqSinalED = vqUsarED and (dirEntryLong or dirEntryShort)
+
+if vqEnviar and not vqAberta and not vqUsado and pos != 0 and (vqSinalPBv or vqSinalPPB or vqSinalED)
+    vqDir := pos
+
+    // impDir vem das SMAs e pode apontar para o lado oposto de pos. Quando isso
+    // acontece o Fibonacci esta ancorado na perna errada e os alvos cairiam
+    // atras do preco — melhor mandar null e deixar a saida por stop/flip.
+    bool vqAlvosOk = impDir == pos and not na(rng)
+    vqA1 := vqAlvosOk ? fpN27 : na
+    vqA2 := vqAlvosOk ? fpN62 : na
+
+    string vqVia = vqSinalPBv ? "PBv" : vqSinalPPB ? "PPB-ec" : "ED"
+    // ED nao passa por pullback, entao nao tem Score. Nota fixa B em vez do
+    // D que o score 0 produziria — ela rompeu com volume, nao e entrada ruim.
+    string vqNota = vqVia == "ED" ? "B" : pbScore >= 5 ? "A+" : pbScore >= 4 ? "A" : pbScore >= 3 ? "B" : pbScore >= 2 ? "C" : "D"
+    string vqMerc = enfraquecendo ? "FRACO" : balizOK ? "FORTE" : "OK"
+    string vqVer = (vqVia == "ED" ? "ED sem pullback" : "Score " + str.tostring(pbScore) + "/5") + (balizOK ? " · baliz. OK" : " · baliz. fraco") + (exitWarn ? " · estrutura em alerta" : "") + (oteDead ? " · OTE 0.786 rompida" : oteRej ? " · rejeicao OTE" : "")
+
+    alert('{"secret":"' + vqSecret + '","tipo":"entrada","ativo":"' + vqAtivo + '","timeframe":"' + timeframe.period + '","indicador":"VQ Pullback v1.8","direcao":"' + (vqDir == 1 ? "LONG" : "SHORT") + '","via_entrada":"' + vqVia + '","preco_entrada":' + vqN(close) + ',"stop":' + vqN(pstLine) + ',"tp1":' + vqN(vqA1) + ',"tp2":' + vqN(vqA2) + ',"confianca_nota":"' + vqNota + '","confianca_score":"' + str.tostring(pbScore) + '","mercado_nota":"' + vqMerc + '","veredito":"' + vqVer + '","correlacao_btc":' + vqC(vqCorrBtc) + '}', alert.freq_once_per_bar_close)
+
+    vqAberta := true
+    vqUsado := true
+
+
+// ── PAINEL PRINCIPAL ────────────────────────────────────────────────────
+
+f_tpos(string p) => p == "Direita Superior" ? position.top_right : p == "Direita Inferior" ? position.bottom_right : p == "Esquerda Superior" ? position.top_left : position.bottom_left
+
+// v1.8: tamanhos globais (valem para as 3 tabelas). WEB = maior/legivel no
+// monitor; Celular = compacto. (Corrige inversao anterior.)
+bool ehCel = panelSize == "Celular"
+string szT = ehCel ? size.small : size.normal
+string szS = ehCel ? size.tiny : size.small
+
+var table pan = table.new(f_tpos(panelPos), 2, 13, bgcolor=color.new(#0B0E11, 0), border_width=1, border_color=color.new(#2A2E39, 0), frame_width=1, frame_color=color.new(#434651, 0))
+
+if showPanel and barstate.islast
+    color cV = #00E676
+    color cR = #FF1744
+    color cG = #90A4AE
+    color cL = #FFA726
+    color cC = #26C6DA
+    color cB = color.white
+    color cF = color.new(#1B1F2A, 0)
+    color cH = color.new(#5E35B1, 0)
+
+    table.cell(pan, 0, 0, "VQ Pullback v1.8", text_color=cB, text_size=szT, bgcolor=cH, text_halign=text.align_center)
+    table.merge_cells(pan, 0, 0, 1, 0)
+
+    string eTxt = pos == 1 ? "LONG ▲" : pos == -1 ? "SHORT ▼" : "FORA"
+    color eCor = pos == 1 ? cV : pos == -1 ? cR : cG
+    table.cell(pan, 0, 1, "Estado", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 1, eTxt, text_color=eCor, text_size=szT, bgcolor=cF, text_halign=text.align_center)
+
+    string qualTxt = posPBqual == 3 ? " OTIMO" : posPBqual == 2 ? " BOM" : ""
+    string fTxt = phase == 0 ? "—" : phase == 1 ? (dirEntry ? "ED — entrada direta" : "ROMPEU — aguarde") : phase == 2 ? "PULLBACK — espere a volta" : phase == 3 ? "PBv — virada (agressiva)" : "PPB-ec — segura" + qualTxt
+    color fCor = phase == 0 ? cG : phase == 1 ? cL : phase == 2 ? cR : phase == 3 ? cC : cV
+    table.cell(pan, 0, 2, "Acao", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 2, fTxt, text_color=fCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
+    string spTxt = pos == 0 ? "—" : (spread >= 0 ? "+" : "") + str.tostring(spread, "#.##") + "% (ROE " + (roe >= 0 ? "+" : "") + str.tostring(roe, "#.#") + "%)"
+    color spCor = spread > 0 ? cV : spread < 0 ? cR : cG
+    table.cell(pan, 0, 3, "Spread", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 3, spTxt, text_color=spCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
+    string scTxt = phase == 2 ? str.tostring(pbScore) + "/5" : phase >= 3 ? str.tostring(pbScore) + "/5 ✓" : "—"
+    color scCor = pbScore >= 3 ? cV : pbScore >= 1 ? cL : cG
+    table.cell(pan, 0, 4, "Score", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 4, scTxt, text_color=scCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
+    string bzTxt = pos == 0 ? "—" : enfraquecendo ? (pos == 1 ? "LONG enfraq. ⚠" : "SHORT enfraq. ⚠") : balizOK ? "SEGURE ✓" : "ATENCAO ⚠"
+    color bzCor = pos == 0 ? cG : enfraquecendo ? cR : balizOK ? cV : cL
+    table.cell(pan, 0, 5, "Baliz.", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 5, bzTxt, text_color=bzCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
+    // v1.8: Estrutura (topo menor / fundo maior)
+    string exTxt = pos == 0 ? "—" : exitWarn ? (pos == 1 ? "TOPO MENOR ⚠ saida" : "FUNDO MAIOR ⚠ saida") : "topos/fundos OK ✓"
+    color exCor = pos == 0 ? cG : exitWarn ? #FF9100 : cV
+    table.cell(pan, 0, 6, "Estrutura", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 6, exTxt, text_color=exCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
+    // v1.8: OTE (regua do Bruno)
+    string oteTxt = (impDir == 0 or na(rng)) ? "—" : oteDead ? "0.786 rompida ✗ morto" : oteRej ? "Rejeicao OTE ✓" : inOTE ? "na OTE — aguarde rejeicao" : (impDir == 1 ? "impulso ALTA — fora" : "impulso BAIXA — fora")
+    color oteCor = (impDir == 0 or na(rng)) ? cG : oteDead ? cR : oteRej ? cV : inOTE ? cC : cG
+    table.cell(pan, 0, 7, "OTE", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 7, oteTxt, text_color=oteCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
+    string s2Txt = not na(sma200) ? (dist200 >= 0 ? "+" : "") + str.tostring(dist200, "#.##") + "%" : "—"
+    bool paredeProx = not na(sma200) and math.abs(dist200) < 2.0
+    color s2Cor = paredeProx ? cL : cV
+    string s2Label = paredeProx ? "SMA200 ⚠" : "SMA200"
+    table.cell(pan, 0, 8, s2Label, text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 8, s2Txt, text_color=s2Cor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
+    string saT = pos == 0 ? "—" : str.tostring(distAma, "#.##") + "%"
+    table.cell(pan, 0, 9, "Stop AMA", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 9, saT, text_color=cG, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
+    string spT = pos == 0 ? "—" : str.tostring(distPST, "#.##") + "%"
+    table.cell(pan, 0, 10, "Stop PST", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 10, spT, text_color=cG, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
+    string enT = pos == 0 ? "—" : str.tostring(brkPrice, format.mintick)
+    table.cell(pan, 0, 11, "Entrada", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 11, enT, text_color=cB, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
+
+// ── RELOGIO DE SESSAO (v1.8) — fuso BR / UTC-3 ──────────────────────────
+
+pad2(int x) => (x < 10 ? "0" : "") + str.tostring(x)
+
+var table sesTab = table.new(f_tpos(sessPos), 2, 4, bgcolor=color.new(#0B0E11, 0), border_width=1, border_color=color.new(#2A2E39, 0), frame_width=1, frame_color=color.new(#434651, 0))
+
+if showSess and barstate.islast
+    bool inAsia = not na(time(timeframe.period, sessAsia, "America/Sao_Paulo"))
+    bool inLond = not na(time(timeframe.period, sessLond, "America/Sao_Paulo"))
+    bool inNY = not na(time(timeframe.period, sessNY, "America/Sao_Paulo"))
+
+    int hBR = hour(timenow, "America/Sao_Paulo")
+    int mBR = minute(timenow, "America/Sao_Paulo")
+    color cOn = #00E676
+    color cOff = #FF5252
+    color cHd = color.new(#1565C0, 0)
+    color cF2 = color.new(#1B1F2A, 0)
+
+    table.cell(sesTab, 0, 0, "SESSAO (BR " + pad2(hBR) + ":" + pad2(mBR) + ")", text_color=color.white, text_size=szT, bgcolor=cHd, text_halign=text.align_center)
+    table.merge_cells(sesTab, 0, 0, 1, 0)
+
+    table.cell(sesTab, 0, 1, "Asia (Toquio)", text_color=color.white, text_size=szS, bgcolor=cF2, text_halign=text.align_left)
+    table.cell(sesTab, 1, 1, inAsia ? "ABERTO ●" : "fechado ●", text_color=inAsia ? cOn : cOff, text_size=szT, bgcolor=cF2, text_halign=text.align_center)
+
+    table.cell(sesTab, 0, 2, "Londres", text_color=color.white, text_size=szS, bgcolor=cF2, text_halign=text.align_left)
+    table.cell(sesTab, 1, 2, inLond ? "ABERTO ●" : "fechado ●", text_color=inLond ? cOn : cOff, text_size=szT, bgcolor=cF2, text_halign=text.align_center)
+
+    table.cell(sesTab, 0, 3, "Nova York", text_color=color.white, text_size=szS, bgcolor=cF2, text_halign=text.align_left)
+    table.cell(sesTab, 1, 3, inNY ? "ABERTO ●" : "fechado ●", text_color=inNY ? cOn : cOff, text_size=szT, bgcolor=cF2, text_halign=text.align_center)
+
+
+// ── ESTATISTICAS (v1.8) ─────────────────────────────────────────────────
+
+var table stTab = table.new(f_tpos(statsPos), 2, 6, bgcolor=color.new(#0B0E11, 0), border_width=1, border_color=color.new(#2A2E39, 0), frame_width=1, frame_color=color.new(#434651, 0))
+
+if showStats and barstate.islast
+    color cHd = color.new(#37474F, 0)
+    color cF3 = color.new(#1B1F2A, 0)
+    color cW = color.white
+    string wrTxt = na(winRate) ? "—" : str.tostring(winRate, "#.#") + "%"
+    color wrCor = na(winRate) ? color.gray : winRate >= 50 ? #00E676 : #FFA726
+
+    table.cell(stTab, 0, 0, "ESTATISTICAS  " + str.tostring(stTotal) + " ops", text_color=cW, text_size=szT, bgcolor=cHd, text_halign=text.align_center)
+    table.cell(stTab, 1, 0, "WR " + wrTxt, text_color=wrCor, text_size=szT, bgcolor=cHd, text_halign=text.align_center)
+
+    table.cell(stTab, 0, 1, "Ganhos (TP)", text_color=cW, text_size=szS, bgcolor=cF3, text_halign=text.align_left)
+    table.cell(stTab, 1, 1, str.tostring(stWins) + "  T1:" + str.tostring(stT1) + " T2:" + str.tostring(stT2) + " T3:" + str.tostring(stT3), text_color=#00E676, text_size=szS, bgcolor=cF3, text_halign=text.align_center)
+
+    table.cell(stTab, 0, 2, "Breakeven", text_color=cW, text_size=szS, bgcolor=cF3, text_halign=text.align_left)
+    table.cell(stTab, 1, 2, str.tostring(stBEc), text_color=#90A4AE, text_size=szS, bgcolor=cF3, text_halign=text.align_center)
+
+    table.cell(stTab, 0, 3, "Stop", text_color=cW, text_size=szS, bgcolor=cF3, text_halign=text.align_left)
+    table.cell(stTab, 1, 3, str.tostring(stStops), text_color=#FF5252, text_size=szS, bgcolor=cF3, text_halign=text.align_center)
+
+    table.cell(stTab, 0, 4, "LONG (g/tot)", text_color=cW, text_size=szS, bgcolor=cF3, text_halign=text.align_left)
+    table.cell(stTab, 1, 4, str.tostring(stLongW) + "/" + str.tostring(stLong), text_color=#00E676, text_size=szS, bgcolor=cF3, text_halign=text.align_center)
+
+    table.cell(stTab, 0, 5, "SHORT (g/tot)", text_color=cW, text_size=szS, bgcolor=cF3, text_halign=text.align_left)
+    table.cell(stTab, 1, 5, str.tostring(stShortW) + "/" + str.tostring(stShort), text_color=#FF5252, text_size=szS, bgcolor=cF3, text_halign=text.align_center)
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// NOTAS v1.0-v1.7 (motor preservado na v1.8)
+// v1.0 motor inicial | v1.1 PST real LonesomeTheBlue + 6 bugs
+// v1.2 usabilidade (inicio PB, diamante filtrado, PST off default)
+// v1.3 Pos PB congela topo/fundo (pbRefHigh/pbRefLow) + limpeza de ciclo
+// v1.4 nomenclatura PBv / PPB-ec | v1.5 ED + legibilidade + volume PPB-ec
+// v1.6 aviso de enfraquecimento (painel) | v1.7 linha do preco de entrada
+// ══════════════════════════════════════════════════════════════════════════
+// FIM — VQ Pullback v1.8
+// ══════════════════════════════════════════════════════════════════════════

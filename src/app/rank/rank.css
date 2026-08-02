@@ -1,0 +1,225 @@
+/* ============================================================
+   Rank de Ativos — mesma linguagem visual da tela de Resultados
+   ============================================================ */
+
+.rk-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #D1D4DC;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+/* Controles */
+.rk-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-end;
+  padding: 16px 20px;
+  background: #1E222D;
+  border: 1px solid #2A2E39;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.rk-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rk-control-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #787B86;
+}
+
+.rk-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.rk-btn {
+  width: auto;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #0B0E11;
+  border: 1px solid #2A2E39;
+  border-radius: 6px;
+  color: #787B86;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rk-btn:hover {
+  color: #D1D4DC;
+  border-color: #434651;
+}
+
+.rk-btn.active {
+  background: #2962FF;
+  border-color: #2962FF;
+  color: #FFFFFF;
+}
+
+/* Cards de resumo */
+.rk-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.rk-stat-card {
+  flex: 1;
+  min-width: 160px;
+  padding: 16px 20px;
+  background: #1E222D;
+  border: 1px solid #2A2E39;
+  border-radius: 12px;
+}
+
+.rk-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #787B86;
+  margin-bottom: 6px;
+}
+
+.rk-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #D1D4DC;
+  font-variant-numeric: tabular-nums;
+}
+
+.rk-stat-value.green { color: #00E676; }
+.rk-stat-value.red { color: #FF5252; }
+
+/* Tabela */
+.rk-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #2A2E39;
+  border-radius: 12px;
+  background: #1E222D;
+}
+
+.rk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rk-table thead th {
+  padding: 10px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #787B86;
+  background: #0B0E11;
+  border-bottom: 2px solid #2A2E39;
+  text-align: right;
+}
+
+.rk-table thead th:nth-child(1),
+.rk-table thead th:nth-child(2) {
+  text-align: left;
+}
+
+.rk-table tbody tr {
+  border-bottom: 1px solid #2A2E39;
+  transition: background-color 0.12s ease;
+}
+
+.rk-table tbody tr:nth-child(odd) { background: #1E222D; }
+.rk-table tbody tr:nth-child(even) { background: #161A25; }
+.rk-table tbody tr:hover { background: #252930 !important; }
+
+.rk-table tbody td {
+  padding: 10px 9px;
+  color: #D1D4DC;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rk-table tbody td:nth-child(1),
+.rk-table tbody td:nth-child(2) {
+  text-align: left;
+}
+
+/* Posição: os três primeiros ganham peso, o resto fica discreto — a hierarquia
+   é a razão de existir de um ranking. */
+.rk-pos {
+  font-weight: 800;
+  color: #787B86;
+  font-size: 13px;
+}
+
+.rk-pos-1 { color: #FFC107; }
+.rk-pos-2 { color: #B0BEC5; }
+.rk-pos-3 { color: #FF8A65; }
+
+.rk-ativo {
+  font-weight: 700;
+  color: #D1D4DC;
+  font-size: 13px;
+}
+
+.rk-bold { font-weight: 700; }
+.rk-green { color: #00E676; }
+.rk-red { color: #FF5252; }
+.rk-yellow { color: #FFA726; }
+
+.rk-empty {
+  text-align: center;
+  color: #787B86;
+  padding: 40px 0;
+  font-size: 13px;
+}
+
+.rk-skeleton {
+  height: 18px;
+  margin: 6px 0;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #1E222D 25%, #252930 50%, #1E222D 75%);
+  background-size: 200% 100%;
+  animation: rk-shimmer 1.2s infinite;
+}
+
+@keyframes rk-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.rk-error {
+  padding: 12px 16px;
+  background: rgba(255, 82, 82, 0.1);
+  border: 1px solid rgba(255, 82, 82, 0.3);
+  border-radius: 8px;
+  color: #FF5252;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.rk-nota {
+  margin-top: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #787B86;
+  max-width: 70ch;
+}
+
+@media (max-width: 640px) {
+  .rk-controls { gap: 16px; }
+  .rk-stat-card { min-width: 130px; }
+}

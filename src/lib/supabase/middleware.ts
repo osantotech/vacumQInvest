@@ -40,9 +40,23 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Public routes that don't require authentication
-  const publicPaths = ['/login', '/auth/callback', '/api/webhook'];
-  const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
+  const pathname = request.nextUrl.pathname;
+
+  // Páginas de login/callback: prefixo, porque têm sub-rotas próprias.
+  const publicPagePrefixes = ['/login', '/auth/callback'];
+
+  // Rotas de API que o middleware deixa passar porque elas mesmas fazem a
+  // autenticação: /api/webhook valida o WEBHOOK_SECRET e /api/scanner aceita
+  // o Bearer CRON_SECRET do cron da Vercel (que não tem sessão de usuário) ou
+  // exige sessão. Sem isto o cron era redirecionado para /login e nunca rodava.
+  //
+  // Comparação EXATA de propósito: com prefixo, `/api/scanner` liberaria
+  // também `/api/scanner/history`, que depende do middleware para se proteger.
+  const selfAuthenticatedApis = ['/api/webhook', '/api/scanner'];
+
+  const isPublicPath =
+    publicPagePrefixes.some(path => pathname.startsWith(path)) ||
+    selfAuthenticatedApis.includes(pathname);
 
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();

@@ -3,6 +3,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { createServiceClient } from '@/lib/supabase/server';
 import type { WebhookPayload, Alert } from '@/lib/types';
 import { calculateDurationMinutes, calculateResultPct, calculateResultMarg } from '@/lib/calculations';
@@ -15,12 +16,32 @@ import {
   logTelegram,
 } from '@/lib/telegram';
 
+/**
+ * Comparação em tempo constante: `!==` sai no primeiro byte diferente, o que
+ * deixa o tempo de resposta revelar quanto do segredo já está correto.
+ */
+function secretMatches(received: string | undefined, expected: string | undefined): boolean {
+  if (!received || !expected) return false;
+  const a = Buffer.from(received);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+/** Correlação de Pearson só existe entre -1 e 1. */
+function parseCorrelacao(raw: string | undefined): number | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  const n = parseFloat(raw);
+  if (!Number.isFinite(n) || n < -1 || n > 1) return null;
+  return n;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: WebhookPayload = await request.json();
 
     // Validate webhook secret
-    if (!body.secret || body.secret !== process.env.WEBHOOK_SECRET) {
+    if (!secretMatches(body.secret, process.env.WEBHOOK_SECRET)) {
       return NextResponse.json(
         { error: 'Unauthorized: invalid secret' },
         { status: 401 }
@@ -40,19 +61,42 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Buscar o alerta mais recente aberto para este ativo
-      const { data: latestAlert, error: alertErr } = await supabase
+      // Buscar o alerta mais recente AINDA ABERTO para este ativo.
+      // Pegar só o último alerta não basta: se ele já tiver resultado, uma
+      // segunda saída gravaria um resultado duplicado no mesmo alerta.
+      const { data: recentAlerts, error: alertErr } = await supabase
         .from('alerts')
         .select('*')
         .eq('ativo', body.ativo)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(20);
 
-      if (alertErr || !latestAlert) {
+      if (alertErr || !recentAlerts || recentAlerts.length === 0) {
         return NextResponse.json(
           { error: `No active alert found for asset ${body.ativo}` },
           { status: 404 }
+        );
+      }
+
+      const { data: closed, error: closedErr } = await supabase
+        .from('results')
+        .select('alert_id')
+        .in('alert_id', recentAlerts.map(a => a.id));
+
+      if (closedErr) {
+        return NextResponse.json(
+          { error: 'Failed to check open alerts', details: closedErr.message },
+          { status: 500 }
+        );
+      }
+
+      const closedIds = new Set((closed ?? []).map(r => r.alert_id));
+      const latestAlert = recentAlerts.find(a => !closedIds.has(a.id));
+
+      if (!latestAlert) {
+        return NextResponse.json(
+          { error: `No open alert found for asset ${body.ativo} (already closed)` },
+          { status: 409 }
         );
       }
 
@@ -116,6 +160,9 @@ export async function POST(request: NextRequest) {
       mercado_nota: body.mercado_nota ?? null,
       veredito: body.veredito ?? null,
       via_entrada: body.via_entrada ?? null,
+      // Fora de [-1, 1] só pode ser lixo: descartar é melhor que gravar um
+      // número que a tela vai transformar num aviso de risco falso.
+      correlacao_btc: parseCorrelacao(body.correlacao_btc),
       origem: 'webhook' as const,
       webhook_raw: body as unknown as Record<string, unknown>,
     };

@@ -81,7 +81,8 @@ export async function POST(request: NextRequest) {
       resultado_pct,
       resultado_marg,
       status: body.status,
-      observacao: body.observacao ?? null,
+      // `observacao` não existe na tabela `results` do banco — enviá-la fazia
+      // o PostgREST rejeitar o insert inteiro (42703).
       telegram_sent: false,
     };
 
@@ -174,7 +175,8 @@ export async function GET(request: NextRequest) {
           timeframe,
           indicador,
           direcao,
-          preco_entrada
+          preco_entrada,
+          correlacao_btc
         )
       `, { count: 'exact' })
       .order('data_saida', { ascending: false })
