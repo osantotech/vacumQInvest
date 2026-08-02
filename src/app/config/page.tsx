@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 /* eslint-disable @next/next/no-img-element */
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import GerenciarAcessos from '@/components/GerenciarAcessos';
 import type { User } from '@supabase/supabase-js';
 
 export default function Config() {
@@ -115,6 +116,10 @@ export default function Config() {
           </div>
         </div>
       </div>
+
+      {/* Só renderiza para admin — o componente se esconde sozinho quando a
+          rota responde 403. */}
+      <GerenciarAcessos />
     </div>
   );
 }

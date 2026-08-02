@@ -1,0 +1,233 @@
+/* ============================================================
+   Gerenciar acessos — visível apenas para admin
+   ============================================================ */
+
+.ga-wrap {
+  margin-top: 24px;
+  padding: 20px;
+  background: #1E222D;
+  border: 1px solid #2A2E39;
+  border-radius: 12px;
+}
+
+.ga-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.ga-cabecalho h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #D1D4DC;
+}
+
+.ga-contagem {
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #12161F;
+  background: #2962FF;
+  border-radius: 20px;
+}
+
+/* Formulário */
+.ga-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.ga-input {
+  flex: 1;
+  min-width: 220px;
+  width: auto;
+  padding: 9px 12px;
+  font-size: 13px;
+  background: #0B0E11;
+  border: 1px solid #2A2E39;
+  border-radius: 8px;
+  color: #D1D4DC;
+  outline: none;
+}
+
+.ga-input:focus {
+  border-color: #2962FF;
+}
+
+.ga-botao {
+  width: auto;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #2962FF;
+  border: none;
+  border-radius: 8px;
+  color: #FFFFFF;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.ga-botao:hover:not(:disabled) { background: #1E4BD8; }
+.ga-botao:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Credencial recém-criada — aparece uma vez só */
+.ga-credencial {
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: rgba(0, 230, 118, 0.07);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #D1D4DC;
+}
+
+.ga-credencial > strong {
+  display: block;
+  margin-bottom: 10px;
+  color: #00E676;
+}
+
+.ga-cred-linha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.ga-cred-linha span {
+  min-width: 54px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #787B86;
+}
+
+.ga-cred-linha code {
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #0B0E11;
+  border: 1px solid #2A2E39;
+  border-radius: 6px;
+  color: #D1D4DC;
+  user-select: all;
+}
+
+.ga-credencial p {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #90A4AE;
+}
+
+.ga-erro {
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: rgba(255, 82, 82, 0.1);
+  border: 1px solid rgba(255, 82, 82, 0.3);
+  border-radius: 8px;
+  color: #FF5252;
+  font-size: 12.5px;
+}
+
+/* Tabela */
+.ga-tabela-wrap {
+  overflow-x: auto;
+  border: 1px solid #2A2E39;
+  border-radius: 8px;
+}
+
+.ga-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.ga-tabela thead th {
+  padding: 9px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  color: #787B86;
+  background: #0B0E11;
+  border-bottom: 1px solid #2A2E39;
+}
+
+.ga-tabela tbody tr { border-bottom: 1px solid #2A2E39; }
+.ga-tabela tbody tr:last-child { border-bottom: none; }
+.ga-tabela tbody tr:hover { background: #252930; }
+
+.ga-tabela tbody td {
+  padding: 10px 12px;
+  color: #D1D4DC;
+  vertical-align: middle;
+}
+
+.ga-email { font-weight: 600; }
+
+.ga-tag-admin,
+.ga-tag-voce {
+  margin-left: 7px;
+  padding: 2px 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.ga-tag-admin { color: #12161F; background: #FFC107; }
+.ga-tag-voce { color: #12161F; background: #2962FF; }
+
+.ga-ok { color: #00E676; }
+.ga-pendente { color: #FFA726; }
+
+.ga-data {
+  font-size: 11.5px;
+  color: #90A4AE;
+  font-variant-numeric: tabular-nums;
+}
+
+.ga-versao {
+  font-size: 10px;
+  color: #787B86;
+}
+
+.ga-acao { text-align: right; }
+
+.ga-revogar {
+  width: auto;
+  padding: 4px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid rgba(255, 82, 82, 0.4);
+  border-radius: 6px;
+  color: #FF5252;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ga-revogar:hover { background: rgba(255, 82, 82, 0.12); }
+
+.ga-nota {
+  margin: 12px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #787B86;
+  max-width: 80ch;
+}
+
+@media (max-width: 640px) {
+  .ga-wrap { padding: 14px; }
+  .ga-form { flex-direction: column; }
+  .ga-botao { width: 100%; }
+}
