@@ -47,12 +47,36 @@ export interface Alert {
    * NULL no próprio BTC ou quando a medição está desligada.
    */
   correlacao_btc: number | null;
+  /** Snapshot do painel do indicador no instante do sinal. */
+  painel: PainelSnapshot | null;
+  /** Observação escrita pelo trader — a parte do diário que não se automatiza. */
+  anotacao: string | null;
   origem: Origem;
   webhook_raw: Record<string, unknown> | null;
 }
 
 /** A partir daqui o sinal deixa de ser independente: é o BTC com outro nome. */
 export const CORRELACAO_BTC_ALTA = 0.85;
+
+/**
+ * O que o painel do indicador mostrava no instante do sinal.
+ *
+ * Guardamos os valores semânticos ("SEGURE"), não o texto da tela
+ * ("SEGURE ✓") — o rótulo muda com o layout, o significado não.
+ */
+export interface PainelSnapshot {
+  fase: string | null;
+  baliz: string | null;
+  estrutura: string | null;
+  ote: string | null;
+  sessoes: string | null;
+  spread_pct: number | null;
+  roe_pct: number | null;
+  sma200_pct: number | null;
+  stop_ama_pct: number | null;
+  stop_pst_pct: number | null;
+  impulso_dir: number | null;
+}
 
 export interface AlertWithResult extends Alert {
   result: Result | null;
@@ -135,6 +159,7 @@ export interface WebhookPayload {
   mercado_nota?: string;
   veredito?: string;
   correlacao_btc?: string;
+  painel?: PainelSnapshot;
 }
 
 export interface ResultPayload {

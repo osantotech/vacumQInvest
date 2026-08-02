@@ -698,6 +698,16 @@ float vqBtcClose = request.security("BINANCE:BTCUSDT.P", timeframe.period, close
 bool vqEhBtc = str.startswith(vqAtivo, "BTCUSDT")
 float vqCorrBtc = (vqCorrOn and not vqEhBtc and not na(vqBtcClose)) ? ta.correlation(close, vqBtcClose, vqCorrLen) : na
 
+// ── SESSOES (para o diario) ──
+// time() com sessao precisa ficar no escopo global. As variaveis do painel
+// principal sao locais do bloco `if showPanel`, entao nao servem aqui.
+bool vqAsia = not na(time(timeframe.period, sessAsia, "America/Sao_Paulo"))
+bool vqLond = not na(time(timeframe.period, sessLond, "America/Sao_Paulo"))
+bool vqNY   = not na(time(timeframe.period, sessNY,   "America/Sao_Paulo"))
+
+// Numero com 2 casas para o snapshot do painel; format.mintick e para preco.
+vqP(v) => na(v) ? "null" : str.tostring(v, "#.##")
+
 var bool vqAberta = false    // ja mandei entrada e ainda nao mandei a saida
 var bool vqUsado = false     // este ciclo de PST ja gerou sua operacao
 var int vqDir = 0
@@ -772,7 +782,28 @@ if vqEnviar and not vqAberta and not vqUsado and pos != 0 and (vqSinalPBv or vqS
     string vqMerc = enfraquecendo ? "FRACO" : balizOK ? "FORTE" : "OK"
     string vqVer = (vqVia == "ED" ? "ED sem pullback" : "Score " + str.tostring(pbScore) + "/5") + (balizOK ? " · baliz. OK" : " · baliz. fraco") + (exitWarn ? " · estrutura em alerta" : "") + (oteDead ? " · OTE 0.786 rompida" : oteRej ? " · rejeicao OTE" : "")
 
-    alert('{"secret":"' + vqSecret + '","tipo":"entrada","ativo":"' + vqAtivo + '","timeframe":"' + timeframe.period + '","indicador":"VQ Pullback v1.8","direcao":"' + (vqDir == 1 ? "LONG" : "SHORT") + '","via_entrada":"' + vqVia + '","preco_entrada":' + vqN(close) + ',"stop":' + vqN(pstLine) + ',"tp1":' + vqN(vqA1) + ',"tp2":' + vqN(vqA2) + ',"confianca_nota":"' + vqNota + '","confianca_score":"' + str.tostring(pbScore) + '","mercado_nota":"' + vqMerc + '","veredito":"' + vqVer + '","correlacao_btc":' + vqC(vqCorrBtc) + '}', alert.freq_once_per_bar_close)
+    // ── SNAPSHOT DO PAINEL (para o diario) ──
+    // Valores semanticos, nao o texto formatado da tela: o rotulo pode mudar
+    // com o idioma ou o layout, mas "SEGURE" continua sendo "SEGURE".
+    string pFase = phase == 0 ? "NENHUMA" : phase == 1 ? (dirEntry ? "ED" : "ROMPEU") : phase == 2 ? "PULLBACK" : phase == 3 ? "PBv" : "PPB-ec"
+    string pBaliz = pos == 0 ? "FORA" : enfraquecendo ? "ENFRAQUECENDO" : balizOK ? "SEGURE" : "ATENCAO"
+    string pEstrut = pos == 0 ? "FORA" : exitWarn ? (pos == 1 ? "TOPO_MENOR" : "FUNDO_MAIOR") : "OK"
+    string pOte = (impDir == 0 or na(rng)) ? "INDEFINIDO" : oteDead ? "MORTA_0786" : oteRej ? "REJEICAO" : inOTE ? "NA_ZONA" : (impDir == 1 ? "IMPULSO_ALTA_FORA" : "IMPULSO_BAIXA_FORA")
+    string pSessao = (vqAsia ? "ASIA," : "") + (vqLond ? "LONDRES," : "") + (vqNY ? "NY" : "")
+
+    string vqPainel = '{"fase":"' + pFase +
+       '","baliz":"'        + pBaliz +
+       '","estrutura":"'    + pEstrut +
+       '","ote":"'          + pOte +
+       '","sessoes":"'      + pSessao +
+       '","spread_pct":'    + vqP(spread) +
+       ',"roe_pct":'        + vqP(roe) +
+       ',"sma200_pct":'     + vqP(dist200) +
+       ',"stop_ama_pct":'   + vqP(distAma) +
+       ',"stop_pst_pct":'   + vqP(distPST) +
+       ',"impulso_dir":'    + str.tostring(impDir) + '}'
+
+    alert('{"secret":"' + vqSecret + '","tipo":"entrada","ativo":"' + vqAtivo + '","timeframe":"' + timeframe.period + '","indicador":"VQ Pullback v1.8","direcao":"' + (vqDir == 1 ? "LONG" : "SHORT") + '","via_entrada":"' + vqVia + '","preco_entrada":' + vqN(close) + ',"stop":' + vqN(pstLine) + ',"tp1":' + vqN(vqA1) + ',"tp2":' + vqN(vqA2) + ',"confianca_nota":"' + vqNota + '","confianca_score":"' + str.tostring(pbScore) + '","mercado_nota":"' + vqMerc + '","veredito":"' + vqVer + '","correlacao_btc":' + vqC(vqCorrBtc) + ',"painel":' + vqPainel + '}', alert.freq_once_per_bar_close)
 
     vqAberta := true
     vqUsado := true

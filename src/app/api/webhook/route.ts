@@ -180,6 +180,9 @@ export async function POST(request: NextRequest) {
       // Fora de [-1, 1] só pode ser lixo: descartar é melhor que gravar um
       // número que a tela vai transformar num aviso de risco falso.
       correlacao_btc: parseCorrelacao(body.correlacao_btc),
+      // Snapshot do painel para o diário. Chega como objeto no JSON do Pine e
+      // vai direto para a coluna jsonb, sem transformação.
+      painel: body.painel ?? null,
       origem: 'webhook' as const,
       webhook_raw: body as unknown as Record<string, unknown>,
     };
