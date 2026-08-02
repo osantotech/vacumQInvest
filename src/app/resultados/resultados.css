@@ -279,12 +279,154 @@
 /* Marca de "isto é BTC disfarçado". Dourado do bitcoin, discreto: é um aviso
    de risco a ser notado ao varrer a coluna, não um selo a ser celebrado. */
 .ra-btc {
+  width: auto;
+  padding: 0 2px;
   font-size: 13px;
   font-weight: 800;
   line-height: 1;
   color: #F7931A;
-  cursor: help;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  /* Alvo de toque de 24px sem ocupar 24px de layout: a tabela é densa, mas o
+     dedo não encolhe. */
+  position: relative;
 }
+
+.ra-btc::after {
+  content: '';
+  position: absolute;
+  inset: -8px -6px;
+}
+
+.ra-btc:hover { color: #FFB74D; }
+
+/* ── Aviso agregado de concentração ── */
+.ra-btc-aviso {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: rgba(247, 147, 26, 0.08);
+  border: 1px solid rgba(247, 147, 26, 0.3);
+  border-radius: 8px;
+}
+
+.ra-btc-aviso-icone {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #F7931A;
+  flex-shrink: 0;
+}
+
+.ra-btc-aviso strong {
+  display: block;
+  font-size: 13px;
+  color: #F7931A;
+  margin-bottom: 2px;
+}
+
+.ra-btc-aviso p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #B0BEC5;
+}
+
+/* ── Detalhe da correlação ── */
+.ra-btc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(11, 14, 17, 0.75);
+  animation: ra-fade 0.15s ease;
+}
+
+@keyframes ra-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.ra-btc-modal {
+  width: 100%;
+  max-width: 380px;
+  padding: 20px;
+  background: #1E222D;
+  border: 1px solid #2A2E39;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.ra-btc-modal-topo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ra-btc-modal-icone {
+  font-size: 22px;
+  font-weight: 800;
+  color: #F7931A;
+}
+
+.ra-btc-modal h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #D1D4DC;
+}
+
+.ra-btc-modal-num {
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #F7931A;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 14px;
+}
+
+.ra-btc-modal-num span {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #787B86;
+  letter-spacing: 0.02em;
+}
+
+.ra-btc-modal p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #B0BEC5;
+}
+
+.ra-btc-modal-nota {
+  font-size: 11px !important;
+  color: #787B86 !important;
+}
+
+.ra-btc-modal button {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #2962FF;
+  border: none;
+  border-radius: 8px;
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ra-btc-modal button:hover { background: #1E4BD8; }
 
 /* Ativo + Copy */
 .ra-ativo {

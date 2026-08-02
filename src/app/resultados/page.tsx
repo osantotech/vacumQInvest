@@ -101,6 +101,9 @@ export default function Resultados() {
   // Copy state
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Detalhe da correlação, aberto ao tocar no ₿
+  const [btcInfo, setBtcInfo] = useState<{ ativo: string; corr: number } | null>(null);
+
   // Fetch data via API endpoint
   const fetchResults = useCallback(async () => {
     setLoading(true);
@@ -208,6 +211,13 @@ export default function Resultados() {
 
     return { ...r, pctResult, spreadLev, res1, res2 };
   });
+
+  // Concentração é propriedade do conjunto, não da linha: contar ícones ₿ um a
+  // um não responde "quanto do meu risco é a mesma aposta repetida".
+  const correlacionadas = computedRows.filter(r => seguiuBtc(r.alert.correlacao_btc));
+  const ativosCorrelacionados = Array.from(
+    new Set(correlacionadas.map(r => r.alert.ativo))
+  );
 
   // Summary stats
   const totalOps = computedRows.length;
@@ -334,6 +344,24 @@ export default function Resultados() {
         </div>
       </div>
 
+      {/* Concentração no BTC — o risco que não aparece operação a operação */}
+      {correlacionadas.length > 0 && (
+        <div className="ra-btc-aviso">
+          <span className="ra-btc-aviso-icone">₿</span>
+          <div>
+            <strong>
+              {correlacionadas.length} de {totalOps} operações desta lista seguiam o BTC
+            </strong>
+            <p>
+              Correlação de {Math.round(CORRELACAO_BTC_ALTA * 100)}% ou mais em{' '}
+              {ativosCorrelacionados.join(', ')}. Abertas ao mesmo tempo, elas não
+              são operações independentes — são uma só aposta no BTC, multiplicada.
+              Se ele virar, viram todas juntas.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div style={{ padding: '12px 16px', background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', borderRadius: '8px', color: '#FF5252', fontSize: '13px', marginBottom: '16px' }}>
@@ -382,12 +410,20 @@ export default function Resultados() {
                       <div className="ra-dir">
                         <span className={`ra-dir-dot ${long ? 'long' : 'short'}`}></span>
                         {seguiuBtc(row.alert.correlacao_btc) && (
-                          <span
+                          <button
+                            type="button"
                             className="ra-btc"
-                            title={`Correlação ${Math.round((row.alert.correlacao_btc ?? 0) * 100)}% com o BTC — este sinal não é independente. Se o BTC virar, ele vira junto.`}
+                            // Botão, não <span> com title: no celular não existe
+                            // hover, e o tooltip deixava o ícone mudo justamente
+                            // onde você mais olha a tabela.
+                            onClick={() => setBtcInfo({
+                              ativo: row.alert.ativo,
+                              corr: row.alert.correlacao_btc ?? 0,
+                            })}
+                            aria-label={`Correlação com o BTC em ${row.alert.ativo}`}
                           >
                             ₿
-                          </span>
+                          </button>
                         )}
                         <span className={`ra-dir-arrow ${long ? 'long' : 'short'}`}>
                           {long ? '↑' : '↓'}
@@ -479,6 +515,48 @@ export default function Resultados() {
           )}
         </table>
       </div>
+
+      {/* Detalhe da correlação (toque no ₿) */}
+      {btcInfo && (
+        <div
+          className="ra-btc-overlay"
+          onClick={() => setBtcInfo(null)}
+          role="presentation"
+        >
+          <div
+            className="ra-btc-modal"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ra-btc-modal-titulo"
+          >
+            <div className="ra-btc-modal-topo">
+              <span className="ra-btc-modal-icone">₿</span>
+              <h3 id="ra-btc-modal-titulo">{btcInfo.ativo} segue o BTC</h3>
+            </div>
+
+            <div className="ra-btc-modal-num">
+              {Math.round(btcInfo.corr * 100)}%
+              <span>de correlação nas últimas velas</span>
+            </div>
+
+            <p>
+              Este sinal não é independente: o ativo está repetindo o movimento
+              do BTC. Se você mantiver outras posições correlacionadas ao mesmo
+              tempo, o que parece uma carteira diversificada é uma só aposta,
+              multiplicada pelo número de posições.
+            </p>
+            <p className="ra-btc-modal-nota">
+              Acima de {Math.round(CORRELACAO_BTC_ALTA * 100)}% o ícone aparece.
+              É um aviso de concentração, não uma nota de qualidade do sinal.
+            </p>
+
+            <button type="button" onClick={() => setBtcInfo(null)}>
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
