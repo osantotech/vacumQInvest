@@ -750,8 +750,20 @@ if vqEnviar and not vqAberta and not vqUsado and pos != 0 and (vqSinalPBv or vqS
     // acontece o Fibonacci esta ancorado na perna errada e os alvos cairiam
     // atras do preco — melhor mandar null e deixar a saida por stop/flip.
     bool vqAlvosOk = impDir == pos and not na(rng)
-    vqA1 := vqAlvosOk ? fpN27 : na
-    vqA2 := vqAlvosOk ? fpN62 : na
+
+    // Alvo atras do preco de entrada nao e alvo: numa ED o rompimento e direto
+    // e o preco costuma JA ter passado das extensoes do Fibonacci. Mandar esse
+    // nivel pintaria na tela um alvo que morreu antes da operacao comecar (visto
+    // ao vivo em SOLUSDT: entrada 73.17 com "alvo" 73.14). Sem alvo valido, a
+    // saida fica por stop ou flip, que e honesto.
+    vqA1 := (vqAlvosOk and not na(fpN27) and (pos == 1 ? fpN27 > close : fpN27 < close)) ? fpN27 : na
+    vqA2 := (vqAlvosOk and not na(fpN62) and (pos == 1 ? fpN62 > close : fpN62 < close)) ? fpN62 : na
+
+    // Se so o alvo distante sobrou, ele vira o primeiro: deixar tp1 vazio e tp2
+    // preenchido leria como se o alvo proximo tivesse sido esquecido.
+    if na(vqA1) and not na(vqA2)
+        vqA1 := vqA2
+        vqA2 := na
 
     string vqVia = vqSinalPBv ? "PBv" : vqSinalPPB ? "PPB-ec" : "ED"
     // ED nao passa por pullback, entao nao tem Score. Nota fixa B em vez do
