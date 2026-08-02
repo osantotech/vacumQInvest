@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import StatsCard from '@/components/StatsCard';
 import EquityCurve, { type EquityPoint } from '@/components/EquityCurve';
+import PainelRisco, { type SinalAberto } from '@/components/PainelRisco';
 import StatusBadge from '@/components/StatusBadge';
+import '@/components/PainelRisco.css';
 import { calculateResultMarg, formatDateTimeBR } from '@/lib/calculations';
 import type { DashboardStats, AlertWithResult } from '@/lib/types';
 
@@ -40,6 +42,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentAlerts, setRecentAlerts] = useState<AlertWithResult[]>([]);
   const [curva, setCurva] = useState<EquityPoint[]>([]);
+  const [abertos, setAbertos] = useState<SinalAberto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +64,20 @@ export default function Dashboard() {
 
         setStats(statsData);
         setRecentAlerts(alertsData.data || []);
+
+        // Só as posições ainda em aberto entram na análise de risco: alertar
+        // sobre a alavancagem de uma operação que já fechou não muda nada.
+        setAbertos(
+          (alertsData.data || [])
+            .filter((a: AlertWithResult) => !a.result)
+            .map((a: AlertWithResult) => ({
+              ativo: a.ativo,
+              direcao: a.direcao,
+              preco_entrada: a.preco_entrada === null ? null : Number(a.preco_entrada),
+              stop: a.stop === null ? null : Number(a.stop),
+              correlacao_btc: a.correlacao_btc === null ? null : Number(a.correlacao_btc),
+            }))
+        );
 
         // A curva é secundária: se ela falhar, o dashboard ainda serve.
         if (resultsRes.ok) {
@@ -211,6 +228,10 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Ocupa o vazio abaixo dos cards e responde "o que faço com estes
+          sinais?" — a tabela acima mostra o quê, esta seção mostra o e daí. */}
+      {!loading && <PainelRisco sinais={abertos} />}
     </div>
   );
 }

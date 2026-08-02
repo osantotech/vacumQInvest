@@ -1,0 +1,146 @@
+/* ============================================================
+   Painel de Risco — traduz os sinais abertos em ação
+   ============================================================ */
+
+.pr-wrap {
+  margin-top: 16px;
+  padding: 18px 20px;
+  background: #1E222D;
+  border: 1px solid #2A2E39;
+  border-radius: 12px;
+}
+
+.pr-header {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.pr-icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+  color: #12161F;
+  background: #FFC107;
+  border-radius: 8px;
+}
+
+.pr-icone.ok {
+  background: #00E676;
+}
+
+.pr-header h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #D1D4DC;
+}
+
+.pr-header p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #90A4AE;
+  max-width: 80ch;
+}
+
+.pr-header strong {
+  color: #FFC107;
+  font-weight: 700;
+}
+
+/* Lista de avisos */
+.pr-lista {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pr-item {
+  padding: 12px 14px;
+  border-radius: 8px;
+  /* A barra lateral colorida dá a gravidade sem pintar o bloco inteiro, que
+     cansaria a leitura de quatro avisos seguidos. */
+  border-left: 3px solid;
+}
+
+.pr-item.critico {
+  background: rgba(255, 82, 82, 0.07);
+  border-color: #FF5252;
+}
+
+.pr-item.atencao {
+  background: rgba(255, 193, 7, 0.07);
+  border-color: #FFC107;
+}
+
+.pr-item-topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+
+.pr-tag {
+  padding: 2px 7px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  border-radius: 4px;
+}
+
+.pr-item.critico .pr-tag {
+  color: #12161F;
+  background: #FF5252;
+}
+
+.pr-item.atencao .pr-tag {
+  color: #12161F;
+  background: #FFC107;
+}
+
+.pr-item-topo strong {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #D1D4DC;
+}
+
+.pr-detalhe {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #90A4AE;
+  max-width: 85ch;
+}
+
+/* A ação é a razão de o aviso existir: ganha peso e cor própria. */
+.pr-acao {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #D1D4DC;
+}
+
+.pr-item.critico .pr-acao {
+  color: #FF8A80;
+}
+
+.pr-item.atencao .pr-acao {
+  color: #FFD54F;
+}
+
+@media (max-width: 640px) {
+  .pr-wrap { padding: 14px; }
+  .pr-header { gap: 10px; }
+  .pr-icone { width: 28px; height: 28px; font-size: 15px; }
+}
