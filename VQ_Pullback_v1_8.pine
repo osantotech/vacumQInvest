@@ -576,6 +576,7 @@ var int stTotal = 0
 var int stWins = 0
 var int stStops = 0
 var int stBEc = 0
+var int stT0 = 0
 var int stT1 = 0
 var int stT2 = 0
 var int stT3 = 0
@@ -629,15 +630,20 @@ if tradeActive
 
 if resKind != 0
     stTotal += 1
-    // Classificacao pelo resultado realizado.
-    if resPct >= stTP3
-        stT3 += 1
-    else if resPct >= stTP2
-        stT2 += 1
-    else if resPct >= stTP1
-        stT1 += 1
     if resKind == 1
         stWins += 1
+        // A faixa so se aplica a GANHO, e precisa de um degrau para o lucro que
+        // fechou antes do primeiro alvo (T0). Sem ele, cinco vitorias ficavam
+        // fora de T1/T2/T3 e a soma nao batia com "Ganhos" — a tabela parecia
+        // ter perdido registros. Defeito introduzido na reescrita de 02/08.
+        if resPct >= stTP3
+            stT3 += 1
+        else if resPct >= stTP2
+            stT2 += 1
+        else if resPct >= stTP1
+            stT1 += 1
+        else
+            stT0 += 1
         if tradeDir == 1
             stLongW += 1
         else if tradeDir == -1
@@ -1008,7 +1014,7 @@ if showStats and barstate.islast
     table.cell(stTab, 1, 0, "WR " + wrTxt, text_color=wrCor, text_size=szT, bgcolor=cHd, text_halign=text.align_center)
 
     table.cell(stTab, 0, 1, "Ganhos (TP)", text_color=cW, text_size=szS, bgcolor=cF3, text_halign=text.align_left)
-    table.cell(stTab, 1, 1, str.tostring(stWins) + "  T1:" + str.tostring(stT1) + " T2:" + str.tostring(stT2) + " T3:" + str.tostring(stT3), text_color=#00E676, text_size=szS, bgcolor=cF3, text_halign=text.align_center)
+    table.cell(stTab, 1, 1, str.tostring(stWins) + "  T0:" + str.tostring(stT0) + " T1:" + str.tostring(stT1) + " T2:" + str.tostring(stT2) + " T3:" + str.tostring(stT3), text_color=#00E676, text_size=szS, bgcolor=cF3, text_halign=text.align_center)
 
     table.cell(stTab, 0, 2, "Breakeven", text_color=cW, text_size=szS, bgcolor=cF3, text_halign=text.align_left)
     table.cell(stTab, 1, 2, str.tostring(stBEc), text_color=#90A4AE, text_size=szS, bgcolor=cF3, text_halign=text.align_center)
