@@ -54,6 +54,10 @@ grpOp = "══ Operacao ══"
 float leverage = input.float(20, "Alavancagem (para calculo ROE)", minval=1, step=5, group=grpOp)
 int fiboLB = input.int(20, "Lookback Fibonacci interno (score)", minval=5, group=grpOp)
 int bodyLB = input.int(14, "Lookback corpo medio", minval=5, group=grpOp)
+// AUDITORIA (achado 6): "corpo forte" tinha DUAS definicoes no script — 1.2x
+// para o diamante de volume e a rejeicao na OTE, 1.5x para o fator 5 do score.
+// Aparecia o ✕ de rejeicao na tela sem o Score subir. Agora e um so, ajustavel.
+float bodyMul = input.float(1.2, "Corpo forte: N x o corpo medio", minval=1.0, step=0.1, group=grpOp, tooltip="Vale para o diamante de volume 5x, para a rejeicao na OTE e para o fator 5 do Score.")
 
 grpImp = "══ Impulso & OTE (Fibonacci auto) ══"
 bool showFib = input.bool(true, "Mostrar Fibonacci do impulso + OTE", group=grpImp)
@@ -110,7 +114,7 @@ float volAvg = ta.sma(volume, volAvgLen)
 float avgBody = ta.sma(math.abs(close - open), bodyLB)
 bool isBull = close > open
 bool isBear = close < open
-bool corpoForte = not na(avgBody) and math.abs(close - open) > avgBody * 1.2   // v1.8: definido cedo (usado tambem na rejeicao OTE)
+bool corpoForte = not na(avgBody) and math.abs(close - open) > avgBody * bodyMul   // v1.8: definido cedo (usado tambem na rejeicao OTE e no fator 5 do score)
 
 var float lastBullVol = na
 var float lastBearVol = na
@@ -190,10 +194,21 @@ if not na(ipl)
     swLow := ipl
     swLowBar := bar_index - impPiv
 
-// v1.8.1: DIRECAO DO IMPULSO ALINHADA A TENDENCIA LOCAL (branca vs amarela).
-// Assim o Fibonacci/OTE/alvos ficam SEMPRE do lado da sua operacao:
-//   branca >= amarela (alta)  -> impulso de ALTA  -> OTE abaixo, alvos acima (LONG)
-//   branca <  amarela (baixa) -> impulso de BAIXA -> OTE acima,  alvos abaixo (SHORT)
+// DIRECAO DO IMPULSO — segue a tendencia local (branca vs amarela):
+//   branca >= amarela (alta)  -> impulso de ALTA  -> OTE abaixo, alvos acima
+//   branca <  amarela (baixa) -> impulso de BAIXA -> OTE acima,  alvos abaixo
+//
+// AUDITORIA 02/08/2026 (achado 7): o comentario anterior afirmava que assim o
+// Fibonacci ficaria "SEMPRE do lado da sua operacao". NAO FICA — e o guia
+// repetia o mesmo erro. A direcao do impulso vem das MEDIAS; a da operacao vem
+// da PST. Sao sistemas independentes que divergem com frequencia (visto ao vivo
+// em SOLUSDT: Estado LONG com impulso BAIXA e os dois alvos abaixo do preco).
+//
+// A divergencia e INFORMACAO, nao defeito. Repare que, para um LONG:
+//     balizOK = smaW > smaY        impDir = smaW >= smaY ? 1 : -1
+// sao a mesma condicao. Impulso invertido E o balizador fraco, dito noutro
+// canto da tela. Forcar impDir := pos cumpriria a promessa do texto antigo, mas
+// apagaria o aviso — o Fibonacci passaria a mentir junto com a expectativa.
 int impDir = 0
 if not na(smaW) and not na(smaY)
     impDir := smaW >= smaY ? 1 : -1
@@ -404,6 +419,12 @@ if pos == 1 and phase == 2
     pbLow := math.min(pbLow, low)
     if vol5xBull
         pbHad5x := true
+    // ATENCAO (auditoria, achado 5): este Fibonacci NAO e o desenhado na tela.
+    // Sao duas reguas diferentes que coexistem:
+    //   AQUI (score):  ancora pbRefHigh -> swingBase, zona 0.382-0.618
+    //   NA TELA (OTE): ancora nos pivos do impulso, zona 0.618-0.786
+    // O fator 3 pode marcar "na zona" enquanto o painel exibe "OTE: fora". Os
+    // dois estao certos, cada um na sua regua — mas o Score nao reflete a OTE.
     float fiboTop = pbRefHigh
     float fiboBase = swingBase
     float fRange = fiboTop - fiboBase
@@ -413,7 +434,7 @@ if pos == 1 and phase == 2
     bool f2 = volume < volAvg * 0.5 and volume[1] < volAvg * 0.5
     bool f3 = fRange > 0 and low <= fZoneHi and low >= fZoneLo
     bool f4 = not na(smaY) and low <= smaY and close > smaY
-    bool f5 = isBull and not na(avgBody) and math.abs(close - open) > avgBody * 1.5
+    bool f5 = isBull and corpoForte
     int sc = (f1 ? 1 : 0) + (f2 ? 1 : 0) + (f3 ? 1 : 0) + (f4 ? 1 : 0) + (f5 ? 1 : 0)
     pbScore := sc
     if sc >= 3
@@ -446,7 +467,7 @@ if pos == -1 and phase == 2
     bool s2 = volume < volAvg * 0.5 and volume[1] < volAvg * 0.5
     bool s3 = fRange2 > 0 and high >= fZoneLo2 and high <= fZoneHi2
     bool s4 = not na(smaY) and high >= smaY and close < smaY
-    bool s5 = isBear and not na(avgBody) and math.abs(close - open) > avgBody * 1.5
+    bool s5 = isBear and corpoForte
     int scs = (s1 ? 1 : 0) + (s2 ? 1 : 0) + (s3 ? 1 : 0) + (s4 ? 1 : 0) + (s5 ? 1 : 0)
     pbScore := scs
     if scs >= 3
@@ -492,8 +513,19 @@ if phase == 4 and pos == -1 and not na(smaW) and not na(smaY)
 bool topoMenor = showExit and pos == 1 and not na(iph) and not na(prevPH) and iph < prevPH
 bool fundoMaior = showExit and pos == -1 and not na(ipl) and not na(prevPL) and ipl > prevPL
 
+// Estrutura recomposta desarma o aviso: um topo MAIOR que o anterior (LONG) ou
+// um fundo MENOR (SHORT) significa que a sequencia voltou a ser saudavel.
+bool topoMaior = pos == 1 and not na(iph) and not na(prevPH) and iph > prevPH
+bool fundoMenor = pos == -1 and not na(ipl) and not na(prevPL) and ipl < prevPL
+
 var bool exitWarn = false
 if pstFlipLong or pstFlipShort
+    exitWarn := false
+// AUDITORIA 02/08/2026 (achado 8): antes so o flip zerava este aviso. Formado
+// um topo menor, o painel exibia "TOPO MENOR ⚠ saida" por horas, mesmo depois
+// de o preco fazer topos maiores e a estrutura se recompor — contradizendo o
+// proprio guia, que define o campo como "estrutura ainda saudavel".
+if topoMaior or fundoMenor
     exitWarn := false
 if topoMenor or fundoMaior
     exitWarn := true
@@ -515,13 +547,30 @@ float dist200 = not na(sma200) ? (close - sma200) / close * 100 : 0.0
 
 
 // ══════════════════════════════════════════════════════════════════════════
-// v1.8 — ESTATISTICAS EMBUTIDAS (backtest simples por ciclo de rompimento)
+// v1.8 — ESTATISTICAS EMBUTIDAS (reescritas apos a auditoria de 02/08/2026)
 // ══════════════════════════════════════════════════════════════════════════
-// Abre uma "operacao virtual" a cada FLIP (rompimento). Mede o 'spread' ate
-// bater Alvo1/2/3 ou o stop. Apos o Alvo1, o stop vira zero (breakeven, como
-// o Bruno). Fecha por: Alvo3, stop, breakeven (pos-Alvo1), ou novo flip.
-// Classifica pela FASE MAIS ALTA atingida (maxFav). MODELO SIMPLIFICADO —
-// serve para CALIBRAR, validar contra o diario; nao e resultado real.
+// A versao anterior tinha CINCO vieses, todos para o mesmo lado (otimista):
+//
+//  10) abria a operacao no FLIP da PST, e nao nos sinais que se opera de fato
+//      (ED/PBv/PPB-ec) — media um sistema diferente do executado;
+//  11) operacao perdedora fechada no flip era contada como BREAKEVEN, nunca
+//      como perda: o prejuizo sumia da tabela;
+//  12) trade que tocava o Alvo 1 e voltava a zero entrava como GANHO — ganho
+//      de 0% inflando a taxa de acerto;
+//  13) T1/T2/T3 classificavam pela EXCURSAO MAXIMA: um trade que subiu 8% e
+//      fechou em zero aparecia como T3 e como vitoria;
+//  14) so olhava `close`, entao stop furado no meio da vela nao contava — mas
+//      na corretora a posicao ja teria sido encerrada.
+//
+// Agora: abre no sinal operavel, mede pelo pior e melhor preco da barra, e
+// classifica pelo resultado REALIZADO. Continua sendo modelo simplificado —
+// nao substitui o diario de operacoes reais.
+
+// Sinais de entrada (declarados aqui: as estatisticas dependem deles).
+bool dirEntryLong = dirEntry and not dirEntry[1] and pos == 1
+bool dirEntryShort = dirEntry and not dirEntry[1] and pos == -1
+bool fimPBsignal = phase == 3 and phase[1] == 2
+bool posPBsignal = phase == 4 and phase[1] != 4
 
 var int stTotal = 0
 var int stWins = 0
@@ -535,35 +584,57 @@ var int stShort = 0
 var int stLongW = 0
 var int stShortW = 0
 var bool tradeActive = false
+var float stEntry = na
 var float tradeMaxFav = 0.0
 var int tradeDir = 0
 var bool tradeBE = false
 
-bool flippedNow = pstFlipLong or pstFlipShort
-int resKind = 0   // 0=nada, 1=win, 2=stop, 3=breakeven
+// Excursao medida a partir do preco do SINAL, com o pior e o melhor preco da
+// barra — nao so o fechamento.
+float stNow = 0.0
+float stFav = 0.0
+float stAdv = 0.0
+if tradeActive and not na(stEntry) and stEntry > 0
+    stNow := tradeDir == 1 ? (close - stEntry) / stEntry * 100 : (stEntry - close) / stEntry * 100
+    stFav := tradeDir == 1 ? (high  - stEntry) / stEntry * 100 : (stEntry - low)  / stEntry * 100
+    stAdv := tradeDir == 1 ? (low   - stEntry) / stEntry * 100 : (stEntry - high) / stEntry * 100
 
-if tradeActive and not flippedNow
-    tradeMaxFav := math.max(tradeMaxFav, spread)
+bool flippedNow = pstFlipLong or pstFlipShort
+bool sinalEntrada = dirEntryLong or dirEntryShort or fimPBsignal or posPBsignal
+
+int resKind = 0        // 0=nada  1=ganho  2=perda  3=zero a zero
+float resPct = 0.0     // resultado REALIZADO, nao a excursao
+
+if tradeActive
+    tradeMaxFav := math.max(tradeMaxFav, stFav)
     if stBEmove and not tradeBE and tradeMaxFav >= stTP1
         tradeBE := true
-    if tradeMaxFav >= stTP3
-        resKind := 1
-    else if tradeBE and spread <= 0
-        resKind := 1
-    else if (not tradeBE) and spread <= (-1 * stStop)
-        resKind := 2
 
-if flippedNow and tradeActive
-    resKind := tradeMaxFav >= stTP1 ? 1 : 3
+    // O stop e avaliado ANTES do alvo: dentro de uma mesma vela nao da para
+    // saber o que o preco tocou primeiro, e assumir o pior e o unico jeito de
+    // nao inflar o resultado.
+    if (not tradeBE) and stAdv <= -stStop
+        resKind := 2
+        resPct := -stStop
+    else if tradeBE and stAdv <= 0
+        resKind := 3
+        resPct := 0.0
+    else if tradeMaxFav >= stTP3
+        resKind := 1
+        resPct := stTP3
+    else if flippedNow
+        // Fechada pela virada: vale o que estava valendo. Perda e perda.
+        resPct := stNow
+        resKind := resPct > 0 ? 1 : resPct < 0 ? 2 : 3
 
 if resKind != 0
     stTotal += 1
-    int lvl = tradeMaxFav >= stTP3 ? 3 : tradeMaxFav >= stTP2 ? 2 : tradeMaxFav >= stTP1 ? 1 : 0
-    if lvl == 3
+    // Classificacao pelo resultado realizado.
+    if resPct >= stTP3
         stT3 += 1
-    else if lvl == 2
+    else if resPct >= stTP2
         stT2 += 1
-    else if lvl == 1
+    else if resPct >= stTP1
         stT1 += 1
     if resKind == 1
         stWins += 1
@@ -580,10 +651,13 @@ if resKind != 0
     else if tradeDir == -1
         stShort += 1
     tradeActive := false
+    stEntry := na
 
-if flippedNow
+// Abre no sinal operavel — o mesmo que dispara o alerta para o dashboard.
+if sinalEntrada and not tradeActive and pos != 0
     tradeActive := true
     tradeDir := pos
+    stEntry := close
     tradeMaxFav := 0.0
     tradeBE := false
 
@@ -609,18 +683,14 @@ plotshape(pbStartLong, "Inicio PB Long", shape.circle, location.abovebar, color.
 plotshape(pbStartShort, "Inicio PB Short", shape.circle, location.belowbar, color.new(#FF7043, 20), text="PB", textcolor=color.new(#FF7043, 0), size=size.tiny)
 
 // ENTRADA DIRETA (ED)
-bool dirEntryLong = dirEntry and not dirEntry[1] and pos == 1
-bool dirEntryShort = dirEntry and not dirEntry[1] and pos == -1
 plotshape(dirEntryLong, "ED Direta Long", shape.labelup, location.belowbar, color.new(#26C6DA, 0), text="ED", textcolor=color.white, size=size.small)
 plotshape(dirEntryShort, "ED Direta Short", shape.labeldown, location.abovebar, color.new(#26C6DA, 0), text="ED", textcolor=color.white, size=size.small)
 
 // PBv = PullBack de virada (agressiva)
-bool fimPBsignal = phase == 3 and phase[1] == 2
 plotshape(fimPBsignal and pos == 1, "PBv Virada Long", shape.labeldown, location.abovebar, color.new(#00BCD4, 0), text="PBv", textcolor=color.white, size=size.small)
 plotshape(fimPBsignal and pos == -1, "PBv Virada Short", shape.labelup, location.belowbar, color.new(#00BCD4, 0), text="PBv", textcolor=color.white, size=size.small)
 
 // PPB-ec = Pos-PullBack Entrada confirmada (segura)
-bool posPBsignal = phase == 4 and phase[1] != 4
 color posPBcol = posPBqual == 3 ? color.new(#76FF03, 0) : posPBqual == 2 ? color.new(#B2FF59, 0) : color.new(#CDDC39, 0)
 plotshape(posPBsignal and pos == 1, "PPB-ec Long", shape.labelup, location.belowbar, color=posPBcol, text="PPB-ec", textcolor=color.black, size=size.small)
 plotshape(posPBsignal and pos == -1, "PPB-ec Short", shape.labeldown, location.abovebar, color=posPBcol, text="PPB-ec", textcolor=color.black, size=size.small)
