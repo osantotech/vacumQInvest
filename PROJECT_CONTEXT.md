@@ -3,7 +3,7 @@
 > **NUNCA apague este arquivo.** Ao iniciar uma sessão sem contexto, leia-o
 > primeiro. Ele descreve o estado real do sistema, não a intenção original.
 >
-> Última revisão: **02/08/2026** (segunda atualização do dia — diário e auditoria do Pine)
+> Última revisão: **03/08/2026** (drone / v1.9 e a medição do "igualou")
 
 ---
 
@@ -19,7 +19,7 @@ Produção: https://vacum-q-invest-i4go.vercel.app
 ## 2. Fluxo real dos dados
 
 ```
-TradingView (indicador VQ Pullback v1.8)
+TradingView (indicador VQ Pullback v1.9)
         │  alert() com JSON
         ▼
 POST /api/webhook  ──────► Supabase (alerts / results)
@@ -31,7 +31,7 @@ Existe também `/api/scanner`, que varre a Binance Futures sozinho e grava em
 `scanner_signals`. É o caminho previsto para escalar além do limite de alertas
 do TradingView. Está funcional, mas ainda não alimenta `alerts`/`results`.
 
-## 3. O indicador — `VQ_Pullback_v1_8.pine`
+## 3. O indicador — `VQ_Pullback_v1_9.pine`
 
 O bloco de webhook fica no fim do arquivo. Regras que ele implementa:
 
@@ -125,7 +125,7 @@ A tela em Configurações faz as duas de uma vez. Admin atual:
 
 ## 8-B. Auditoria do Pine (02/08/2026)
 
-Relatório completo em `AUDITORIA_PINE_v1_8.md`. **14 achados.** O que o leitor
+Relatório completo em `AUDITORIA_PINE_v1_8.md` (auditoria da v1.8, corrigida na v1.9). **14 achados.** O que o leitor
 futuro precisa saber sem abrir o relatório:
 
 **O que passou:** motor PST fiel ao algoritmo original; **sem repaint nos
@@ -215,6 +215,60 @@ que já inflou a taxa de acerto do indicador uma vez (ver 8-B).
 fundos do gráfico maior — que é o que o Sandro usa no vídeo para dizer "tende a
 alcançar níveis maiores" — continua sendo leitura de olho.
 
+## 8-E. O "igualou" do Sandro — medido e reprovado (03/08/2026)
+
+**A proposta:** o Sandro identifica o fim do pullback quando velas consecutivas
+têm o **mesmo extremo** — mínimas alinhadas antes de virar para cima, máximas
+alinhadas antes de virar para baixo. No vídeo ele repete três vezes: *"toda vez
+que iguala é o momento da virada"*.
+
+Ele marcou os pontos no gráfico (bolinhas azuis nos fundos, linha horizontal
+nos topos). O padrão existe e é visível. **A questão era se ele prevê algo.**
+
+**Método:** 1.500 velas de 30m em NEAR, SOL, AVAX e DUSK. Toda vela cujo extremo
+ficasse a menos de 5% do ATR do extremo anterior; medida a **direção** (variação
+do fechamento) 4, 8, 12 e 20 velas depois.
+
+| Horizonte | fundo alinhado → subiu? | topo alinhado → caiu? |
+|---|---|---|
+| 2h | −0,016% | +0,035% |
+| 4h | −0,045% | +0,029% |
+| 6h | −0,068% | +0,036% |
+| 10h | −0,087% | +0,061% |
+
+~520 ocorrências de cada. **Nenhum resultado significativo** — os IC de 95% são
+duas a três vezes maiores que as médias, e os fundos saem levemente na direção
+*contrária* à esperada.
+
+**O número que explica o padrão:** **33,4% de todas as velas** têm um extremo
+alinhado com a anterior (tolerância 10% do ATR); **15,1% no mesmo tick exato**.
+Uma em cada três. Logo, *sempre* existe um "igualou" perto de qualquer reversão
+— basta olhar para trás. É o que torna o padrão convincente no gráfico e inútil
+como gatilho isolado. NEAR cota com 4 casas e o ATR vale ~79 ticks: duas velas
+repetirem um extremo por acaso é comum, não é informação.
+
+**Por que NÃO virou fator do Score:** um fator que marca 33% das vezes
+**facilitaria** atingir o limiar de 3 de 5, e o PBv passaria a disparar mais sem
+que a qualidade tivesse mudado. Mais sinais, mesma informação — o tipo de
+mudança que parece progresso no gráfico e aparece como prejuízo no extrato.
+**Este raciocínio vale para qualquer fator futuro que alguém proponha:** medir a
+frequência antes de medir o efeito.
+
+**Limites deste teste — podem inverter a conclusão:**
+1. A réplica em JS da máquina de estados é grosseira (não implementa a saída da
+   fase 2 por score ≥ 3). "Dentro do pullback" capturou 67-78% das velas, alto
+   demais para servir de filtro.
+2. O padrão foi testado **isolado**. O Sandro nunca o usa assim — ele já filtrou
+   por PST, estrutura, 2h e posição das médias. Pode valer como *timing* depois
+   desses filtros, e o teste não cobriria isso.
+3. A definição de "igualou" é **nossa** (extremos dentro de X% do ATR). Se para
+   ele o alinhamento inclui corpo, volume ou posição, medimos outra coisa.
+
+**Próximo passo acordado:** pedir ao Sandro **15 a 20 casos marcados** (ativo,
+timeframe, data e hora). Medir aqueles e comparar com os ~520 encontrados. Se
+tiverem algo que os outros não têm, *aquilo* vira a regra — e a regra passa a ser
+o que ele de fato usa, não uma aproximação dela.
+
 ## 9. Armadilhas já pagas — não repita
 
 1. **Coluna faltando derruba o webhook inteiro** (PostgREST 42703). Já aconteceu
@@ -262,13 +316,10 @@ real do usuário:**
 **Pendente:**
 - **Recriar os alertas no TradingView** para a v1.9 (drone). Até isso, os
   alertas armados rodam a versão anterior e chegam com `tendencia_htf` nulo.
-- **O "igualou" do Sandro ainda não existe no código.** No vídeo ele identifica
-  o fim do pullback por **mínimas iguais** em velas consecutivas (*equal lows*)
-  — repete três vezes que "toda vez que iguala é o momento da virada". Nenhum
-  dos 5 fatores do score detecta isso; o código decide a fase 3 por `score >= 3`.
-  Adiado de propósito: é afinação de um mecanismo que acabou de receber uma
-  mudança estrutural acima dele (o drone). A tolerância (`atr * 0.10`?) precisa
-  vir do Sandro — errar a folga é pior que não ter a regra.
+- **O "igualou" do Sandro foi medido e NÃO entra como está** — ver 8-E. Não é
+  mais falta de parâmetro: é ausência de efeito em ~520 ocorrências, 4 moedas e
+  4 horizontes. Pendente é só o passo seguinte: pedir a ele 15-20 casos marcados
+  para medir exatamente aqueles.
 - **Duas suspeitas levantadas pelo vídeo, ainda não medidas:** (a) a PST chicoteia
   o bastante para resetar a máquina de estados antes de completar 1→2→3→4, o que
   explicaria `4/4 ED`; (b) `phase 1→2` usa `close < brkPrice` — um mergulho que

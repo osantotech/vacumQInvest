@@ -1,6 +1,6 @@
 # Auditoria — VQ Pullback v1.8
 
-**Escopo:** código Pine (965 linhas) confrontado com o `Guia_VQ_Pullback_v1_8.md`.
+**Escopo:** código Pine (965 linhas) confrontado com o `Guia_VQ_Pullback_v1_9.md`.
 **Data:** 02/08/2026
 **Método:** leitura bloco a bloco — motor PST → máquina de estados → score → contexto v1.8 → estatísticas.
 

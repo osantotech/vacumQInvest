@@ -44,3 +44,9 @@ Senha*Supabase*
 
 # backups do banco — dados operacionais, não versionar
 backups/
+
+# Python do backend/ (fora do fluxo atual, mas presente no disco).
+# Sem isto, um `git add -A` distraido arrasta ~11 mil arquivos do venv.
+backend/venv/
+__pycache__/
+*.pyc

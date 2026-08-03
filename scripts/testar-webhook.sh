@@ -38,10 +38,12 @@ enviar() {
     -H 'Content-Type: application/json' --data "$corpo"
 }
 
-# Mesmo formato que o bloco alert() do VQ_Pullback_v1_8.pine monta, incluindo
-# o tp3 ausente (o v1.8 só tem dois alvos: as extensões -0.27 e -0.62).
+# Mesmo formato que o bloco alert() do VQ_Pullback_v1_9.pine monta, incluindo
+# o tp3 ausente (só existem dois alvos: as extensões -0.27 e -0.62) e os três
+# campos do drone. `alinhado_htf` vai sem aspas de propósito: é booleano JSON,
+# e null nele significa "o gráfico maior não respondeu", não "está contra".
 if [[ "$ETAPA" == "entrada" || "$ETAPA" == "ambos" ]]; then
-  enviar "ENTRADA" '{"secret":"'"$SECRET"'","tipo":"entrada","ativo":"TESTEUSDT","timeframe":"30","indicador":"VQ Pullback v1.8","direcao":"SHORT","via_entrada":"PBv","preco_entrada":"30.99","stop":"31.64","tp1":"30.56","tp2":"30.20","confianca_nota":"A","confianca_score":"4","mercado_nota":"FORTE","veredito":"Score 4/5 · baliz. OK · rejeicao OTE","correlacao_btc":"0.9142"}'
+  enviar "ENTRADA" '{"secret":"'"$SECRET"'","tipo":"entrada","ativo":"TESTEUSDT","timeframe":"30","indicador":"VQ Pullback v1.9","direcao":"SHORT","via_entrada":"PBv","preco_entrada":"30.99","stop":"31.64","tp1":"30.56","tp2":"30.20","confianca_nota":"A","confianca_score":"4","mercado_nota":"FORTE","veredito":"Score 4/5 · baliz. OK · rejeicao OTE","correlacao_btc":"0.9142","tendencia_htf":"SHORT","htf_timeframe":"120","alinhado_htf":true}'
 fi
 
 if [[ "$ETAPA" == "saida" || "$ETAPA" == "ambos" ]]; then

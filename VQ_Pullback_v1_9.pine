@@ -1,8 +1,8 @@
 //@version=5
-indicator("VQ Pullback v1.8", "VQ_PB v1.8", overlay=true, max_labels_count=500, max_lines_count=200, max_boxes_count=20)
+indicator("VQ Pullback v1.9", "VQ_PB v1.9", overlay=true, max_labels_count=500, max_lines_count=200, max_boxes_count=20)
 
 // ══════════════════════════════════════════════════════════════════════════
-// INDICADOR 5 — VQ Pullback v1.8
+// INDICADOR 5 — VQ Pullback v1.9
 // ──────────────────────────────────────────────────────────────────────────
 // Detecta rompimentos da Pivot SuperTrend, rastreia pullbacks,
 // sinaliza Fim do Pullback e Pos Pullback.
@@ -30,6 +30,17 @@ indicator("VQ Pullback v1.8", "VQ_PB v1.8", overlay=true, max_labels_count=500, 
 //       rompimento, se andou ate Alvo1/2/3 ou bateu stop. Reaproveita o
 //       'spread' ja calculado. Modelo simplificado para CALIBRAR — validar
 //       contra o diario, nao e promessa de resultado real.
+// v1.9: DRONE — a tendencia do timeframe maior (padrao 2h), lida de dentro do
+//   grafico de execucao (30m). O metodo do Bruno Aguiar sempre usou os dois
+//   graficos; ate a v1.8 o indicador so enxergava um deles, e disparava com a
+//   mesma conviccao a favor ou contra o grafico maior.
+//   O sinal contra o drone NAO e bloqueado — passa MARCADO. Bloquear apagaria
+//   metade do dado, e sem os dois grupos nao ha como responder depois, com
+//   numero, se operar a favor de fato rende mais.
+//   Tambem entram aqui as correcoes da auditoria de 02/08/2026: o aviso de
+//   estrutura que nunca se desarmava, o limiar de corpo duplicado e a reescrita
+//   das ESTATISTICAS (cinco vieses, todos inflando o resultado para o mesmo
+//   lado — o WR caiu de 35% para 17,6% quando medido sem eles).
 // ══════════════════════════════════════════════════════════════════════════
 
 
@@ -974,7 +985,7 @@ if vqEnviar and not vqAberta and not vqUsado and pos != 0 and (vqSinalPBv or vqS
        ',"stop_pst_pct":'   + vqP(distPST) +
        ',"impulso_dir":'    + str.tostring(impDir) + '}'
 
-    alert('{"secret":"' + vqSecret + '","tipo":"entrada","ativo":"' + vqAtivo + '","timeframe":"' + timeframe.period + '","indicador":"VQ Pullback v1.8","direcao":"' + (vqDir == 1 ? "LONG" : "SHORT") + '","via_entrada":"' + vqVia + '","preco_entrada":' + vqN(close) + ',"stop":' + vqN(pstLine) + ',"tp1":' + vqN(vqA1) + ',"tp2":' + vqN(vqA2) + ',"confianca_nota":"' + vqNota + '","confianca_score":"' + str.tostring(pbScore) + '","mercado_nota":"' + vqMerc + '","veredito":"' + vqVer + '","correlacao_btc":' + vqC(vqCorrBtc) + ',"tendencia_htf":"' + vqHtfDir + '","htf_timeframe":"' + htfTF + '","alinhado_htf":' + vqHtfAlin + ',"painel":' + vqPainel + '}', alert.freq_once_per_bar_close)
+    alert('{"secret":"' + vqSecret + '","tipo":"entrada","ativo":"' + vqAtivo + '","timeframe":"' + timeframe.period + '","indicador":"VQ Pullback v1.9","direcao":"' + (vqDir == 1 ? "LONG" : "SHORT") + '","via_entrada":"' + vqVia + '","preco_entrada":' + vqN(close) + ',"stop":' + vqN(pstLine) + ',"tp1":' + vqN(vqA1) + ',"tp2":' + vqN(vqA2) + ',"confianca_nota":"' + vqNota + '","confianca_score":"' + str.tostring(pbScore) + '","mercado_nota":"' + vqMerc + '","veredito":"' + vqVer + '","correlacao_btc":' + vqC(vqCorrBtc) + ',"tendencia_htf":"' + vqHtfDir + '","htf_timeframe":"' + htfTF + '","alinhado_htf":' + vqHtfAlin + ',"painel":' + vqPainel + '}', alert.freq_once_per_bar_close)
 
     vqAberta := true
     vqUsado := true
@@ -1002,7 +1013,7 @@ if showPanel and barstate.islast
     color cF = color.new(#1B1F2A, 0)
     color cH = color.new(#5E35B1, 0)
 
-    table.cell(pan, 0, 0, "VQ Pullback v1.8", text_color=cB, text_size=szT, bgcolor=cH, text_halign=text.align_center)
+    table.cell(pan, 0, 0, "VQ Pullback v1.9", text_color=cB, text_size=szT, bgcolor=cH, text_halign=text.align_center)
     table.merge_cells(pan, 0, 0, 1, 0)
 
     string eTxt = pos == 1 ? "LONG ▲" : pos == -1 ? "SHORT ▼" : "FORA"
@@ -1148,5 +1159,5 @@ if showStats and barstate.islast
 // v1.4 nomenclatura PBv / PPB-ec | v1.5 ED + legibilidade + volume PPB-ec
 // v1.6 aviso de enfraquecimento (painel) | v1.7 linha do preco de entrada
 // ══════════════════════════════════════════════════════════════════════════
-// FIM — VQ Pullback v1.8
+// FIM — VQ Pullback v1.9
 // ══════════════════════════════════════════════════════════════════════════

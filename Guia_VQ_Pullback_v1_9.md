@@ -1,7 +1,13 @@
-# Guia Completo — VQ Pullback v1.8
+# Guia Completo — VQ Pullback v1.9
 
 **Para quem nunca operou e quer entender CADA coisa que aparece na tela.**
 Leia com calma. Nada aqui é decisão automática — o indicador te dá *informação organizada*; a decisão de entrar e sair continua sendo sua.
+
+> **O que mudou da v1.8 para a v1.9**
+> - **Drone** (novo): o painel passa a mostrar o que o gráfico de 2h está dizendo, sem você trocar de timeframe. Ver seção 3.
+> - **Aviso de estrutura corrigido:** na v1.8 ele travava. Uma vez formado um topo menor, o painel exibia "TOPO MENOR ⚠ saída" até o próximo flip, mesmo que o preço fizesse topos maiores depois. Agora ele volta a dizer "topos/fundos OK ✓" quando a estrutura se recompõe.
+> - **"Corpo forte" tinha duas definições** (1,2× e 1,5× o corpo médio). Aparecia o ✕ de rejeição na tela sem o Score subir. Agora é um só valor, ajustável.
+> - **ESTATÍSTICAS reescritas.** Elas tinham cinco vieses, todos inflando o resultado para o mesmo lado. O acerto exibido caiu de 35% para **17,6%** — o número não piorou, a medição é que era otimista. Leia a seção 7 antes de usar essa tabela para qualquer decisão.
 
 ---
 
@@ -31,7 +37,7 @@ O painel te diz, a cada momento, em qual dessas fases você está.
 
 ---
 
-## 3. O PAINEL PRINCIPAL (caixa "VQ Pullback v1.8")
+## 3. O PAINEL PRINCIPAL (caixa "VQ Pullback v1.9")
 
 É a caixa com o nome do indicador no topo. Linha por linha:
 
@@ -277,7 +283,7 @@ Você não precisa mexer em quase nada. Os que importam:
 ## 9. COMO USAR NA PRÁTICA (o passo a passo do dia)
 
 1. **Defina a direção no gráfico de 2h.** É o timeframe do viés. A PST (Estado LONG/SHORT) e a tendência das médias mandam aqui. (O 4h serve só para volume e Fibonacci.)
-2. **Vá para o 30m para executar.** É onde os gatilhos (rompimento, pullback, ED/PBv/PPB-ec) valem para a entrada. A partir da v1.9 a linha **Drone** do painel já traz a resposta do passo 1 para dentro do 30m — mas continue abrindo o 2h de vez em quando: o indicador lê a PST de lá, não lê a estrutura de topos e fundos, e essa parte ainda é olho.
+2. **Vá para o 30m para executar.** É onde os gatilhos (rompimento, pullback, ED/PBv/PPB-ec) valem para a entrada. A linha **Drone** do painel já traz a resposta do passo 1 para dentro do 30m — mas continue abrindo o 2h de vez em quando: o indicador lê a PST de lá, não lê a estrutura de topos e fundos, e essa parte ainda é olho.
 3. **Espere um sinal de entrada:** ED (agressivo, sem pullback), PBv (cedo, agressivo) ou PPB-ec (confirmado, mais seguro). Prefira o PPB-ec enquanto está calibrando.
 4. **Use a OTE como confirmação, não como gatilho.** Se o preço estiver rejeitando na zona ("Rejeição OTE ✓"), melhor ainda. Se passou da 0.786, não entre.
 5. **Defina o stop:** apertado na amarela (~1%) ou largo na PST (~3%). O painel te dá as duas distâncias.
@@ -298,4 +304,4 @@ Você não precisa mexer em quase nada. Os que importam:
 
 ---
 
-*Documento de apoio ao indicador VQ Pullback v1.8. Baseado no método do Bruno Aguiar (MAC 3.0 / 7M / Águia Spread) e nas contribuições do Sandro. Atualize conforme o indicador evoluir.*
+*Documento de apoio ao indicador VQ Pullback v1.9. Baseado no método do Bruno Aguiar (MAC 3.0 / 7M / Águia Spread) e nas contribuições do Sandro. Atualize conforme o indicador evoluir.*
