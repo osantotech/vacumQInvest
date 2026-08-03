@@ -41,6 +41,32 @@ Em que lado você está, segundo a PST:
 - **SHORT ▼** (vermelho) = vendido / apostando na baixa.
 - **FORA** (cinza) = sem posição definida (só no comecinho do gráfico).
 
+### Drone (a tendência do gráfico maior)
+O que o gráfico de **2h** está dizendo, lido de dentro do gráfico de 30m.
+
+É o "olhar de drone" do método: o gráfico maior confirma a direção, o menor
+executa dentro dela. **Você não precisa trocar de timeframe** — o indicador
+continua rodando em 30m e apenas *pergunta* a direção lá em cima.
+
+- **"2h a favor ✓"** (verde) = o gráfico maior está no mesmo lado da sua
+  posição. É o cenário em que o método diz para operar.
+- **"2h CONTRA ⚠"** (laranja) = os dois discordam. O sinal **continua valendo
+  e continua sendo enviado** — mas você está remando contra o drone, e o alvo
+  tende a vir menor e a reversão mais cedo.
+- **"sem dado ainda"** = o gráfico maior ainda não tem histórico suficiente
+  (acontece no começo do gráfico). Não é um aviso; é ausência de resposta.
+- **"desligado"** = você desmarcou "Consultar o timeframe maior" nos ajustes.
+
+**Por que não bloqueia?** Porque bloquear apagaria metade do dado. Guardando
+os dois grupos, daqui a algumas dezenas de operações dá para responder com
+número, e não com opinião, se operar a favor do drone realmente rende mais.
+A tela de Resultados faz essa conta sozinha.
+
+**Atraso:** o drone confirma com até 2h de atraso, de propósito. Ele lê a
+última vela de 2h **fechada**. Se lesse a vela em formação, o aviso mudaria de
+ideia várias vezes dentro da mesma hora — e essa lentidão é justamente a
+função de um filtro de tendência.
+
 ### Ação
 O que fazer *agora*, conforme a fase:
 - **"—"** = nada acontecendo.
@@ -140,6 +166,12 @@ O preço exato onde a operação começou (de onde o spread é medido). Confira 
 
 ### ✕ âmbar (xis pequeno)
 **Rejeição na OTE.** O preço tocou a zona OTE e voltou com força. É **contexto**, não é gatilho de entrada — confirma que a zona está "segurando".
+
+### ⚠ vermelho (no alto do gráfico)
+**Sinal contra o drone.** Nasceu um sinal de entrada (ED, PBv ou PPB-ec) na
+direção oposta à do gráfico de 2h. Aparece no topo da tela, não junto da vela,
+para não competir com as marcas de entrada — é um enquadramento do sinal, não
+um sinal a mais.
 
 ---
 
@@ -245,7 +277,7 @@ Você não precisa mexer em quase nada. Os que importam:
 ## 9. COMO USAR NA PRÁTICA (o passo a passo do dia)
 
 1. **Defina a direção no gráfico de 2h.** É o timeframe do viés. A PST (Estado LONG/SHORT) e a tendência das médias mandam aqui. (O 4h serve só para volume e Fibonacci.)
-2. **Vá para o 30m para executar.** É onde os gatilhos (rompimento, pullback, ED/PBv/PPB-ec) valem para a entrada.
+2. **Vá para o 30m para executar.** É onde os gatilhos (rompimento, pullback, ED/PBv/PPB-ec) valem para a entrada. A partir da v1.9 a linha **Drone** do painel já traz a resposta do passo 1 para dentro do 30m — mas continue abrindo o 2h de vez em quando: o indicador lê a PST de lá, não lê a estrutura de topos e fundos, e essa parte ainda é olho.
 3. **Espere um sinal de entrada:** ED (agressivo, sem pullback), PBv (cedo, agressivo) ou PPB-ec (confirmado, mais seguro). Prefira o PPB-ec enquanto está calibrando.
 4. **Use a OTE como confirmação, não como gatilho.** Se o preço estiver rejeitando na zona ("Rejeição OTE ✓"), melhor ainda. Se passou da 0.786, não entre.
 5. **Defina o stop:** apertado na amarela (~1%) ou largo na PST (~3%). O painel te dá as duas distâncias.
@@ -261,6 +293,7 @@ Você não precisa mexer em quase nada. Os que importam:
 - **Bata o olho no impulso.** Se a perna desenhada não for a dominante, a zona está errada.
 - **Não existe setup de 95% de acerto.** Esse número não existe no material do Bruno e é perigoso para dimensionar risco.
 - **Espere a rejeição.** Tocar a zona não é sinal. Entrar sem rejeição é comprar faca caindo.
+- **"2h CONTRA" não é proibição — é preço.** O sinal contra o drone continua sendo um sinal. Só saiba que você está remando contra a maré: espere alvo menor, reversão mais cedo e menos margem para errar o stop.
 - **Você ainda está em modo demo / calibração.** O objetivo agora é observar e anotar, não faturar.
 
 ---

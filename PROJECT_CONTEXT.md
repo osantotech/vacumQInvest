@@ -45,9 +45,11 @@ O bloco de webhook fica no fim do arquivo. Regras que ele implementa:
 - **Correlação com o BTC** via `request.security` + `ta.correlation`, 50 velas.
 - **Ticker normalizado**: `SOLUSDT.P` vira `SOLUSDT`, senão o mesmo ativo vira
   duas moedas distintas no banco.
+- **Drone (v1.9)**: a mesma PST lida no timeframe maior (padrão 2h), de dentro
+  do gráfico de 30m. Ver 8-D.
 
 Configuração por gráfico, no grupo "Webhook VacumQInvest": secret, liga/desliga,
-aceitar ED, medir correlação, velas da correlação.
+aceitar ED, medir correlação, velas da correlação. O drone tem grupo próprio.
 
 **Alerta no TradingView:** condição = o indicador, "Any alert() function call",
 campo Mensagem **vazio**, webhook apontando para `/api/webhook`.
@@ -77,7 +79,8 @@ campo Mensagem **vazio**, webhook apontando para `/api/webhook`.
 
 Migrations aplicadas: **002** (correlação BTC), **003** (auditoria: termos e
 avisos), **004** (coluna admin), **005** (diário: `alerts.painel` jsonb e
-`alerts.anotacao`). A 001 foi descartada junto com o módulo 3X.
+`alerts.anotacao`), **006** (drone: `tendencia_htf`, `htf_timeframe`,
+`alinhado_htf`). A 001 foi descartada junto com o módulo 3X.
 
 O `painel` guarda o snapshot do indicador no instante do sinal — fase,
 balizador, estrutura, OTE, sessões, spread/ROE e as distâncias até SMA200, média
@@ -176,6 +179,42 @@ redução**; segurar até stop ou alvo, porque a assimetria (poucos ganhos grand
 Isso **inverteu** uma recomendação anterior minha, feita por suposição. Se a
 média migrar para −1% ou menos com a amostra maior, reavaliar.
 
+## 8-D. Drone — a tendência do timeframe maior (02/08/2026)
+
+**Origem:** vídeo do Sandro (sócio) lendo um pullback clássico no NEARUSDT 2h.
+Ao confrontar a fala dele com o código, apareceu o gap real: **o método usa 2h
+para confirmar a tendência e 30m para executar, e o indicador era mono-timeframe
+— rodava em 30m sem nenhuma leitura do 2h.**
+
+O único `request.security` do arquivo buscava o BTC com `timeframe.period`, ou
+seja, no mesmo timeframe do gráfico. Nada olhava para cima.
+
+**O que foi feito:** a mesma PST, encapsulada em `f_pstDirHTF()` e consultada no
+timeframe maior de dentro do gráfico de execução. O gráfico continua sendo 30m e
+**o orçamento de 20 alertas do plano Essential não muda** — cada moeda continua
+gastando um alerta.
+
+**Sem repaint:** `lookahead_off` **e** o valor da barra HTF anterior (`[1]`).
+Sem o `[1]`, a barra de 2h em formação mudaria durante as 4 velas de 30m que a
+compõem, e o alerta já disparado passaria a mostrar outra coisa no histórico.
+Custo: até 2h de atraso na confirmação — que é a função de um filtro de
+tendência, não um defeito.
+
+**Decisão (Ricardo): marca, não bloqueia.** Bloquear apagaria metade do dado, e
+sem os dois grupos não há como responder depois, com número, se operar a favor
+do drone rende mais. `alinhado_htf` é **booleano nulo** quando indefinido:
+"não sei" ≠ "está contra", e confundir os dois contaminaria justamente a
+comparação que a coluna existe para permitir.
+
+**A conta ainda não tem resposta.** A tela de Resultados compara as médias dos
+dois grupos, mas só declara a amostra conclusiva a partir de **30 de cada lado**.
+Antes disso a diferença é ruído — e apresentar ruído como conclusão é o erro
+que já inflou a taxa de acerto do indicador uma vez (ver 8-B).
+
+**O que o drone NÃO lê:** apenas a direção da PST de 2h. A estrutura de topos e
+fundos do gráfico maior — que é o que o Sandro usa no vídeo para dizer "tende a
+alcançar níveis maiores" — continua sendo leitura de olho.
+
 ## 9. Armadilhas já pagas — não repita
 
 1. **Coluna faltando derruba o webhook inteiro** (PostgREST 42703). Já aconteceu
@@ -221,6 +260,20 @@ real do usuário:**
   histórico de 17,6%. O painel agora calcula o WR necessário.
 
 **Pendente:**
+- **Recriar os alertas no TradingView** para a v1.9 (drone). Até isso, os
+  alertas armados rodam a versão anterior e chegam com `tendencia_htf` nulo.
+- **O "igualou" do Sandro ainda não existe no código.** No vídeo ele identifica
+  o fim do pullback por **mínimas iguais** em velas consecutivas (*equal lows*)
+  — repete três vezes que "toda vez que iguala é o momento da virada". Nenhum
+  dos 5 fatores do score detecta isso; o código decide a fase 3 por `score >= 3`.
+  Adiado de propósito: é afinação de um mecanismo que acabou de receber uma
+  mudança estrutural acima dele (o drone). A tolerância (`atr * 0.10`?) precisa
+  vir do Sandro — errar a folga é pior que não ter a regra.
+- **Duas suspeitas levantadas pelo vídeo, ainda não medidas:** (a) a PST chicoteia
+  o bastante para resetar a máquina de estados antes de completar 1→2→3→4, o que
+  explicaria `4/4 ED`; (b) `phase 1→2` usa `close < brkPrice` — um mergulho que
+  fecha acima não conta como pullback, e vira ED duas barras depois. A (b) é
+  **decisão de método**, não bug: mexer exige aval do Ricardo e do Sandro.
 - Substituir o termo por texto de advogado + política de privacidade (LGPD).
 - Ligar o scanner em `alerts`/`results` para escalar às 50+ moedas — o plano
   Essential do TradingView limita a 20 alertas.
