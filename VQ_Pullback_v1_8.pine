@@ -586,6 +586,19 @@ var int stLongW = 0
 var int stShortW = 0
 var bool tradeActive = false
 var float stEntry = na
+
+// ── ESTUDO DO AVISO DE SAIDA ──────────────────────────────────────────
+// Responde empiricamente a pergunta que nenhuma tabela respondia: quando o
+// painel avisa (enfraquecimento ou topo menor/fundo maior), o que acontece
+// DEPOIS? Sair no aviso e melhor do que segurar, ou o aviso chega atrasado?
+//
+// Guarda o spread no instante do primeiro aviso de cada operacao e compara com
+// o resultado final. Sem isso, escolher entre "sair no aviso" e "deixar correr"
+// e chute — e num sistema onde 9 trades carregam 93, chutar sai caro.
+var int   avTotal = 0        // operacoes que chegaram a ter aviso
+var int   avMelhorou = 0     // ... e que terminaram MELHOR do que no aviso
+var float avSomaDelta = 0.0  // soma de (resultado final - spread no aviso)
+var float avSpread = na      // spread no momento do aviso (operacao corrente)
 var float tradeMaxFav = 0.0
 var int tradeDir = 0
 var bool tradeBE = false
@@ -610,6 +623,10 @@ if tradeActive
     tradeMaxFav := math.max(tradeMaxFav, stFav)
     if stBEmove and not tradeBE and tradeMaxFav >= stTP1
         tradeBE := true
+
+    // Primeiro aviso da operacao: congela quanto valia naquele momento.
+    if na(avSpread) and (enfraquecendo or exitWarn)
+        avSpread := stNow
 
     // O stop e avaliado ANTES do alvo: dentro de uma mesma vela nao da para
     // saber o que o preco tocou primeiro, e assumir o pior e o unico jeito de
@@ -656,8 +673,17 @@ if resKind != 0
         stLong += 1
     else if tradeDir == -1
         stShort += 1
+    // Comparacao do aviso: o que teria sido sair ali contra o que de fato foi.
+    if not na(avSpread)
+        avTotal += 1
+        float delta = resPct - avSpread
+        avSomaDelta += delta
+        if delta > 0
+            avMelhorou += 1
+
     tradeActive := false
     stEntry := na
+    avSpread := na
 
 // Abre no sinal operavel — o mesmo que dispara o alerta para o dashboard.
 if sinalEntrada and not tradeActive and pos != 0
@@ -666,6 +692,7 @@ if sinalEntrada and not tradeActive and pos != 0
     stEntry := close
     tradeMaxFav := 0.0
     tradeBE := false
+    avSpread := na
 
 float winRate = stTotal > 0 ? 100.0 * stWins / stTotal : na
 
@@ -1001,7 +1028,7 @@ if showSess and barstate.islast
 
 // ── ESTATISTICAS (v1.8) ─────────────────────────────────────────────────
 
-var table stTab = table.new(f_tpos(statsPos), 2, 6, bgcolor=color.new(#0B0E11, 0), border_width=1, border_color=color.new(#2A2E39, 0), frame_width=1, frame_color=color.new(#434651, 0))
+var table stTab = table.new(f_tpos(statsPos), 2, 7, bgcolor=color.new(#0B0E11, 0), border_width=1, border_color=color.new(#2A2E39, 0), frame_width=1, frame_color=color.new(#434651, 0))
 
 if showStats and barstate.islast
     color cHd = color.new(#37474F, 0)
@@ -1027,6 +1054,15 @@ if showStats and barstate.islast
 
     table.cell(stTab, 0, 5, "SHORT (g/tot)", text_color=cW, text_size=szS, bgcolor=cF3, text_halign=text.align_left)
     table.cell(stTab, 1, 5, str.tostring(stShortW) + "/" + str.tostring(stShort), text_color=#FF5252, text_size=szS, bgcolor=cF3, text_halign=text.align_center)
+
+    // Estudo do aviso: media do que aconteceu DEPOIS do painel avisar.
+    // Media negativa => o preco piorou apos o aviso => sair ali era melhor.
+    // Media positiva => o aviso chegou atrasado => segurar rendeu mais.
+    float avMedia = avTotal > 0 ? avSomaDelta / avTotal : na
+    string avTxt = avTotal == 0 ? "sem dados ainda" : str.tostring(avTotal) + " ops · " + str.tostring(avMelhorou) + " melhoraram · media " + (avMedia >= 0 ? "+" : "") + str.tostring(avMedia, "#.##") + "%"
+    color avCor = avTotal == 0 ? color.gray : avMedia > 0 ? #00E676 : #FF5252
+    table.cell(stTab, 0, 6, "Apos o aviso", text_color=cW, text_size=szS, bgcolor=cF3, text_halign=text.align_left)
+    table.cell(stTab, 1, 6, avTxt, text_color=avCor, text_size=szS, bgcolor=cF3, text_halign=text.align_center)
 
 
 // ══════════════════════════════════════════════════════════════════════════
