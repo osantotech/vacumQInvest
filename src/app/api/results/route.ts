@@ -176,7 +176,10 @@ export async function GET(request: NextRequest) {
           indicador,
           direcao,
           preco_entrada,
-          correlacao_btc
+          correlacao_btc,
+          via_entrada,
+          tendencia_htf,
+          alinhado_htf
         )
       `, { count: 'exact' })
       .order('data_saida', { ascending: false })

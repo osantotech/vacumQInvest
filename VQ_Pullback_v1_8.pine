@@ -40,6 +40,11 @@ int pstPivot = input.int(2, "Periodo do Pivo", minval=1, group=grpPST)
 float pstFactor = input.float(3.0, "Fator ATR", minval=0.5, step=0.5, group=grpPST)
 int pstAtr = input.int(10, "Periodo ATR", minval=1, group=grpPST)
 
+grpHTF = "══ Drone (tendencia do timeframe maior) ══"
+bool htfOn = input.bool(true, "Consultar o timeframe maior", group=grpHTF, tooltip="Metodo Bruno Aguiar: o grafico maior (2h) confirma a tendencia — o olhar de drone; o menor (30m) executa. O indicador continua rodando no grafico atual: ele apenas PERGUNTA a direcao la em cima.")
+string htfTF = input.timeframe("120", "Timeframe do drone", group=grpHTF, tooltip="120 = 2 horas. Deve ser MAIOR que o timeframe do grafico.")
+bool htfMarcar = input.bool(true, "Marcar no grafico os sinais contra o drone", group=grpHTF)
+
 grpSMA = "══ SMAs ══"
 int smaWLen = input.int(8, "SMA Branca (rapida)", minval=2, group=grpSMA)
 int smaYLen = input.int(21, "SMA Amarela (tendencia)", minval=2, group=grpSMA)
@@ -157,6 +162,46 @@ plot(showPST ? pstLine : na, "PST", pstCol, 2, style=plot.style_linebr)
 
 bool pstFlipLong = pstDir == 1 and nz(pstDir[1]) == -1
 bool pstFlipShort = pstDir == -1 and nz(pstDir[1]) == 1
+
+
+// ── DRONE: a mesma PST, lida no timeframe maior ──────────────────────────
+// O grafico continua sendo o de execucao (30m). Aqui so PERGUNTAMOS ao 2h
+// qual a direcao dele — nao mudamos de timeframe.
+//
+// SEM REPAINT: request.security com lookahead_off E o valor da barra ANTERIOR
+// ([1]) do timeframe maior. Sem o [1], a barra de 2h em formacao mudaria de
+// valor durante as 4 velas de 30m que a compoem, e o alerta que ja disparou
+// passaria a mostrar outra coisa no historico. O preco disso e um atraso de
+// ate 2h na confirmacao — aceitavel: a tendencia de drone nao muda a cada
+// meia hora, e essa lentidao e justamente a funcao dela.
+
+f_pstDirHTF() =>
+    float _ph = ta.pivothigh(pstPivot, pstPivot)
+    float _pl = ta.pivotlow(pstPivot, pstPivot)
+    var float _center = na
+    float _lastpp = not na(_ph) ? _ph : not na(_pl) ? _pl : na
+    if not na(_lastpp)
+        _center := na(_center) ? _lastpp : (_center * 2 + _lastpp) / 3
+    float _atr = ta.atr(pstAtr)
+    float _up = not na(_center) ? _center - pstFactor * _atr : na
+    float _dn = not na(_center) ? _center + pstFactor * _atr : na
+    var float _tUp = na
+    var float _tDn = na
+    var int _dir = 1
+    _tUp := na(_up) ? nz(_tUp[1]) : (na(_tUp[1]) ? _up : (close[1] > _tUp[1] ? math.max(_up, _tUp[1]) : _up))
+    _tDn := na(_dn) ? nz(_tDn[1]) : (na(_tDn[1]) ? _dn : (close[1] < _tDn[1] ? math.min(_dn, _tDn[1]) : _dn))
+    _dir := close > nz(_tDn[1]) ? 1 : close < nz(_tUp[1]) ? -1 : nz(_dir[1], 1)
+    _dir
+
+// "120" e o que o Pine entende; "2h" e o que o trader le.
+f_tfNome(string tf) => tf == "15" ? "15m" : tf == "30" ? "30m" : tf == "60" ? "1h" : tf == "120" ? "2h" : tf == "240" ? "4h" : tf == "480" ? "8h" : tf == "D" ? "1D" : tf == "W" ? "1S" : tf
+
+// request.security precisa ficar no escopo global (nunca dentro de if).
+int htfRaw = request.security(syminfo.tickerid, htfTF, f_pstDirHTF()[1], lookahead=barmerge.lookahead_off)
+
+// 0 = indefinido (filtro desligado, ou o timeframe maior ainda sem historico).
+// Indefinido NUNCA e tratado como "contra": na duvida, nao acusa.
+int htfDir = htfOn ? nz(htfRaw, 0) : 0
 
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -486,6 +531,18 @@ if pos == -1
     balizOK := not na(smaW) and not na(smaY) and smaW < smaY
 
 
+// ── ALINHAMENTO COM O DRONE ─────────────────────────────────────────────
+// DECISAO (Ricardo, 02/08/2026): o sinal contra o drone NAO e bloqueado — ele
+// passa MARCADO. Bloquear apagaria o dado, e sem o dado nao ha como comparar,
+// daqui a alguns meses, o desempenho a favor contra o desempenho contra. A
+// entrada continua sendo decisao do usuario; o painel informa, nao decide.
+
+bool htfDefinido = htfDir != 0 and pos != 0
+bool htfContra = htfDefinido and htfDir != pos
+bool htfAFavor = htfDefinido and htfDir == pos
+string htfEstado = not htfDefinido ? "INDEFINIDO" : htfContra ? "CONTRA" : "A_FAVOR"
+
+
 // ── ENFRAQUECIMENTO (v1.6) ──────────────────────────────────────────────
 
 bool enfraquecendo = false
@@ -728,6 +785,10 @@ color posPBcol = posPBqual == 3 ? color.new(#76FF03, 0) : posPBqual == 2 ? color
 plotshape(posPBsignal and pos == 1, "PPB-ec Long", shape.labelup, location.belowbar, color=posPBcol, text="PPB-ec", textcolor=color.black, size=size.small)
 plotshape(posPBsignal and pos == -1, "PPB-ec Short", shape.labeldown, location.abovebar, color=posPBcol, text="PPB-ec", textcolor=color.black, size=size.small)
 
+// Sinal disparado CONTRA a tendencia do drone — o sinal continua valendo e
+// continua sendo enviado; a marca so avisa que o grafico maior discorda.
+plotchar(htfMarcar and sinalEntrada and htfContra, "Sinal contra o drone", "⚠", location.top, color.new(#FF5252, 0), size=size.tiny)
+
 // v1.8: rejeicao na OTE (CONTEXTO, nao entrada) — simbolo distinto, discreto
 plotshape(showOteMark and rejLong, "OTE rejeicao Long", shape.xcross, location.belowbar, color.new(#FFB300, 0), size=size.tiny)
 plotshape(showOteMark and rejShort, "OTE rejeicao Short", shape.xcross, location.abovebar, color.new(#FFB300, 0), size=size.tiny)
@@ -883,7 +944,12 @@ if vqEnviar and not vqAberta and not vqUsado and pos != 0 and (vqSinalPBv or vqS
     // D que o score 0 produziria — ela rompeu com volume, nao e entrada ruim.
     string vqNota = vqVia == "ED" ? "B" : pbScore >= 5 ? "A+" : pbScore >= 4 ? "A" : pbScore >= 3 ? "B" : pbScore >= 2 ? "C" : "D"
     string vqMerc = enfraquecendo ? "FRACO" : balizOK ? "FORTE" : "OK"
-    string vqVer = (vqVia == "ED" ? "ED sem pullback" : "Score " + str.tostring(pbScore) + "/5") + (balizOK ? " · baliz. OK" : " · baliz. fraco") + (exitWarn ? " · estrutura em alerta" : "") + (oteDead ? " · OTE 0.786 rompida" : oteRej ? " · rejeicao OTE" : "")
+    string vqVer = (vqVia == "ED" ? "ED sem pullback" : "Score " + str.tostring(pbScore) + "/5") + (balizOK ? " · baliz. OK" : " · baliz. fraco") + (exitWarn ? " · estrutura em alerta" : "") + (oteDead ? " · OTE 0.786 rompida" : oteRej ? " · rejeicao OTE" : "") + (htfContra ? " · CONTRA o drone " + htfTF : htfAFavor ? " · a favor do drone " + htfTF : "")
+
+    // Drone: quando indefinido, alinhado_htf vai como null (JSON), nao como
+    // false — "nao sei" e diferente de "esta contra".
+    string vqHtfDir = htfDir == 1 ? "LONG" : htfDir == -1 ? "SHORT" : "INDEFINIDO"
+    string vqHtfAlin = not htfDefinido ? "null" : (htfAFavor ? "true" : "false")
 
     // ── SNAPSHOT DO PAINEL (para o diario) ──
     // Valores semanticos, nao o texto formatado da tela: o rotulo pode mudar
@@ -898,6 +964,8 @@ if vqEnviar and not vqAberta and not vqUsado and pos != 0 and (vqSinalPBv or vqS
        '","baliz":"'        + pBaliz +
        '","estrutura":"'    + pEstrut +
        '","ote":"'          + pOte +
+       '","drone":"'        + htfEstado +
+       '","drone_tf":"'     + htfTF +
        '","sessoes":"'      + pSessao +
        '","spread_pct":'    + vqP(spread) +
        ',"roe_pct":'        + vqP(roe) +
@@ -906,7 +974,7 @@ if vqEnviar and not vqAberta and not vqUsado and pos != 0 and (vqSinalPBv or vqS
        ',"stop_pst_pct":'   + vqP(distPST) +
        ',"impulso_dir":'    + str.tostring(impDir) + '}'
 
-    alert('{"secret":"' + vqSecret + '","tipo":"entrada","ativo":"' + vqAtivo + '","timeframe":"' + timeframe.period + '","indicador":"VQ Pullback v1.8","direcao":"' + (vqDir == 1 ? "LONG" : "SHORT") + '","via_entrada":"' + vqVia + '","preco_entrada":' + vqN(close) + ',"stop":' + vqN(pstLine) + ',"tp1":' + vqN(vqA1) + ',"tp2":' + vqN(vqA2) + ',"confianca_nota":"' + vqNota + '","confianca_score":"' + str.tostring(pbScore) + '","mercado_nota":"' + vqMerc + '","veredito":"' + vqVer + '","correlacao_btc":' + vqC(vqCorrBtc) + ',"painel":' + vqPainel + '}', alert.freq_once_per_bar_close)
+    alert('{"secret":"' + vqSecret + '","tipo":"entrada","ativo":"' + vqAtivo + '","timeframe":"' + timeframe.period + '","indicador":"VQ Pullback v1.8","direcao":"' + (vqDir == 1 ? "LONG" : "SHORT") + '","via_entrada":"' + vqVia + '","preco_entrada":' + vqN(close) + ',"stop":' + vqN(pstLine) + ',"tp1":' + vqN(vqA1) + ',"tp2":' + vqN(vqA2) + ',"confianca_nota":"' + vqNota + '","confianca_score":"' + str.tostring(pbScore) + '","mercado_nota":"' + vqMerc + '","veredito":"' + vqVer + '","correlacao_btc":' + vqC(vqCorrBtc) + ',"tendencia_htf":"' + vqHtfDir + '","htf_timeframe":"' + htfTF + '","alinhado_htf":' + vqHtfAlin + ',"painel":' + vqPainel + '}', alert.freq_once_per_bar_close)
 
     vqAberta := true
     vqUsado := true
@@ -942,57 +1010,64 @@ if showPanel and barstate.islast
     table.cell(pan, 0, 1, "Estado", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
     table.cell(pan, 1, 1, eTxt, text_color=eCor, text_size=szT, bgcolor=cF, text_halign=text.align_center)
 
+    // Drone logo abaixo do Estado: e o contexto que enquadra todo o resto da
+    // tela. Um PPB-ec contra o drone e uma leitura diferente do mesmo sinal.
+    string drTxt = not htfOn ? "desligado" : pos == 0 ? "—" : htfDir == 0 ? "sem dado ainda" : htfContra ? f_tfNome(htfTF) + " CONTRA ⚠" : f_tfNome(htfTF) + " a favor ✓"
+    color drCor = (not htfOn or pos == 0 or htfDir == 0) ? cG : htfContra ? #FF9100 : cV
+    table.cell(pan, 0, 2, "Drone", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 2, drTxt, text_color=drCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+
     string qualTxt = posPBqual == 3 ? " OTIMO" : posPBqual == 2 ? " BOM" : ""
     string fTxt = phase == 0 ? "—" : phase == 1 ? (dirEntry ? "ED — entrada direta" : "ROMPEU — aguarde") : phase == 2 ? "PULLBACK — espere a volta" : phase == 3 ? "PBv — virada (agressiva)" : "PPB-ec — segura" + qualTxt
     color fCor = phase == 0 ? cG : phase == 1 ? cL : phase == 2 ? cR : phase == 3 ? cC : cV
-    table.cell(pan, 0, 2, "Acao", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 2, fTxt, text_color=fCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 3, "Acao", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 3, fTxt, text_color=fCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
 
     string spTxt = pos == 0 ? "—" : (spread >= 0 ? "+" : "") + str.tostring(spread, "#.##") + "% (ROE " + (roe >= 0 ? "+" : "") + str.tostring(roe, "#.#") + "%)"
     color spCor = spread > 0 ? cV : spread < 0 ? cR : cG
-    table.cell(pan, 0, 3, "Spread", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 3, spTxt, text_color=spCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 4, "Spread", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 4, spTxt, text_color=spCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
 
     string scTxt = phase == 2 ? str.tostring(pbScore) + "/5" : phase >= 3 ? str.tostring(pbScore) + "/5 ✓" : "—"
     color scCor = pbScore >= 3 ? cV : pbScore >= 1 ? cL : cG
-    table.cell(pan, 0, 4, "Score", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 4, scTxt, text_color=scCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 5, "Score", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 5, scTxt, text_color=scCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
 
     string bzTxt = pos == 0 ? "—" : enfraquecendo ? (pos == 1 ? "LONG enfraq. ⚠" : "SHORT enfraq. ⚠") : balizOK ? "SEGURE ✓" : "ATENCAO ⚠"
     color bzCor = pos == 0 ? cG : enfraquecendo ? cR : balizOK ? cV : cL
-    table.cell(pan, 0, 5, "Baliz.", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 5, bzTxt, text_color=bzCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 6, "Baliz.", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 6, bzTxt, text_color=bzCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
 
     // v1.8: Estrutura (topo menor / fundo maior)
     string exTxt = pos == 0 ? "—" : exitWarn ? (pos == 1 ? "TOPO MENOR ⚠ saida" : "FUNDO MAIOR ⚠ saida") : "topos/fundos OK ✓"
     color exCor = pos == 0 ? cG : exitWarn ? #FF9100 : cV
-    table.cell(pan, 0, 6, "Estrutura", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 6, exTxt, text_color=exCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 7, "Estrutura", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 7, exTxt, text_color=exCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
 
     // v1.8: OTE (regua do Bruno)
     string oteTxt = (impDir == 0 or na(rng)) ? "—" : oteDead ? "0.786 rompida ✗ morto" : oteRej ? "Rejeicao OTE ✓" : inOTE ? "na OTE — aguarde rejeicao" : (impDir == 1 ? "impulso ALTA — fora" : "impulso BAIXA — fora")
     color oteCor = (impDir == 0 or na(rng)) ? cG : oteDead ? cR : oteRej ? cV : inOTE ? cC : cG
-    table.cell(pan, 0, 7, "OTE", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 7, oteTxt, text_color=oteCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 8, "OTE", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 8, oteTxt, text_color=oteCor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
 
     string s2Txt = not na(sma200) ? (dist200 >= 0 ? "+" : "") + str.tostring(dist200, "#.##") + "%" : "—"
     bool paredeProx = not na(sma200) and math.abs(dist200) < 2.0
     color s2Cor = paredeProx ? cL : cV
     string s2Label = paredeProx ? "SMA200 ⚠" : "SMA200"
-    table.cell(pan, 0, 8, s2Label, text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 8, s2Txt, text_color=s2Cor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 9, s2Label, text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 9, s2Txt, text_color=s2Cor, text_size=szS, bgcolor=cF, text_halign=text.align_center)
 
     string saT = pos == 0 ? "—" : str.tostring(distAma, "#.##") + "%"
-    table.cell(pan, 0, 9, "Stop AMA", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 9, saT, text_color=cG, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 10, "Stop AMA", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 10, saT, text_color=cG, text_size=szS, bgcolor=cF, text_halign=text.align_center)
 
     string spT = pos == 0 ? "—" : str.tostring(distPST, "#.##") + "%"
-    table.cell(pan, 0, 10, "Stop PST", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 10, spT, text_color=cG, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 11, "Stop PST", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 11, spT, text_color=cG, text_size=szS, bgcolor=cF, text_halign=text.align_center)
 
     string enT = pos == 0 ? "—" : str.tostring(brkPrice, format.mintick)
-    table.cell(pan, 0, 11, "Entrada", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 11, enT, text_color=cB, text_size=szS, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 12, "Entrada", text_color=cB, text_size=szT, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 12, enT, text_color=cB, text_size=szS, bgcolor=cF, text_halign=text.align_center)
 
 
 // ── RELOGIO DE SESSAO (v1.8) — fuso BR / UTC-3 ──────────────────────────

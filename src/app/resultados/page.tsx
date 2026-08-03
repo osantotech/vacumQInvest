@@ -21,6 +21,11 @@ interface AlertData {
   direcao: string;
   preco_entrada: number;
   correlacao_btc: number | null;
+  via_entrada: string | null;
+  /** Direção do gráfico de 2h quando o sinal nasceu. */
+  tendencia_htf: string | null;
+  /** true = a favor do drone, false = contra, null = indefinido. */
+  alinhado_htf: boolean | null;
 }
 
 interface ResultRow {
@@ -118,6 +123,7 @@ export default function Resultados() {
 
   // Detalhe da correlação, aberto ao tocar no ₿
   const [btcInfo, setBtcInfo] = useState<{ ativo: string; corr: number } | null>(null);
+  const [droneInfo, setDroneInfo] = useState<{ ativo: string; tendencia: string | null } | null>(null);
 
   // Fetch data via API endpoint
   const fetchResults = useCallback(async () => {
@@ -243,6 +249,23 @@ export default function Resultados() {
   // lê como "errou todas", que é o oposto de "ainda não sei".
   const winRate = totalOps > 0 ? (wins / totalOps) * 100 : null;
   const totalSpread = computedRows.reduce((sum, r) => sum + r.spreadLev, 0);
+
+  // A comparação que o drone existe para permitir: entrar a favor do gráfico
+  // maior rende mais que entrar contra? Só entram as operações que têm o dado —
+  // alertas anteriores a esta versão vêm com alinhado_htf nulo, e tratá-los
+  // como "a favor" enviesaria o lado que queremos justamente medir.
+  const comDrone = computedRows.filter(r => typeof r.alert.alinhado_htf === 'boolean');
+  const droneFavor = comDrone.filter(r => r.alert.alinhado_htf === true);
+  const droneContra = comDrone.filter(r => r.alert.alinhado_htf === false);
+  const mediaDe = (rows: typeof computedRows) =>
+    rows.length > 0 ? rows.reduce((s, r) => s + r.pctResult, 0) / rows.length : null;
+  const mediaFavor = mediaDe(droneFavor);
+  const mediaContra = mediaDe(droneContra);
+  // Abaixo disso a diferença entre as duas médias é ruído, e apresentá-la como
+  // conclusão é o erro que já inflou a taxa de acerto do indicador uma vez.
+  const AMOSTRA_CONCLUSIVA = 30;
+  const droneConclusivo =
+    droneFavor.length >= AMOSTRA_CONCLUSIVA && droneContra.length >= AMOSTRA_CONCLUSIVA;
 
   return (
     <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
@@ -381,6 +404,27 @@ export default function Resultados() {
         </div>
       )}
 
+      {/* Drone — a favor x contra o gráfico maior */}
+      {droneContra.length > 0 && (
+        <div className="ra-btc-aviso ra-drone-aviso">
+          <span className="ra-btc-aviso-icone ra-drone-icone">⚑</span>
+          <div>
+            <strong>
+              {droneContra.length} de {comDrone.length} operações entraram contra o gráfico maior
+            </strong>
+            <p>
+              A favor do drone: {mediaFavor === null ? '—' : `${mediaFavor >= 0 ? '+' : ''}${mediaFavor.toFixed(2)}%`}
+              {' '}de média em {droneFavor.length} {droneFavor.length === 1 ? 'operação' : 'operações'}.
+              {' '}Contra: {mediaContra === null ? '—' : `${mediaContra >= 0 ? '+' : ''}${mediaContra.toFixed(2)}%`}
+              {' '}em {droneContra.length}.
+              {droneConclusivo
+                ? ' A amostra já permite comparar os dois grupos.'
+                : ` Amostra ainda pequena para concluir — são necessárias ${AMOSTRA_CONCLUSIVA} de cada lado, e a diferença acima ainda pode ser sorte.`}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div style={{ padding: '12px 16px', background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', borderRadius: '8px', color: '#FF5252', fontSize: '13px', marginBottom: '16px' }}>
@@ -442,6 +486,19 @@ export default function Resultados() {
                             aria-label={`Correlação com o BTC em ${row.alert.ativo}`}
                           >
                             ₿
+                          </button>
+                        )}
+                        {row.alert.alinhado_htf === false && (
+                          <button
+                            type="button"
+                            className="ra-drone"
+                            onClick={() => setDroneInfo({
+                              ativo: row.alert.ativo,
+                              tendencia: row.alert.tendencia_htf,
+                            })}
+                            aria-label={`Sinal contra a tendência do gráfico maior em ${row.alert.ativo}`}
+                          >
+                            ⚑
                           </button>
                         )}
                         <span className={`ra-dir-arrow ${long ? 'long' : 'short'}`}>
@@ -571,6 +628,48 @@ export default function Resultados() {
             </p>
 
             <button type="button" onClick={() => setBtcInfo(null)}>
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
+
+      {droneInfo && (
+        <div
+          className="ra-btc-overlay"
+          onClick={() => setDroneInfo(null)}
+          role="presentation"
+        >
+          <div
+            className="ra-btc-modal ra-drone-modal"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ra-drone-modal-titulo"
+          >
+            <div className="ra-btc-modal-topo">
+              <span className="ra-btc-modal-icone ra-drone-icone">⚑</span>
+              <h3 id="ra-drone-modal-titulo">{droneInfo.ativo} entrou contra o gráfico maior</h3>
+            </div>
+
+            <div className="ra-btc-modal-num ra-drone-num">
+              {droneInfo.tendencia === 'LONG' ? 'ALTA' : droneInfo.tendencia === 'SHORT' ? 'BAIXA' : '—'}
+              <span>era a tendência do gráfico maior quando o sinal nasceu</span>
+            </div>
+
+            <p>
+              O método usa o gráfico de 2h para confirmar a direção — o olhar de
+              drone — e o de 30m para executar dentro dela. Neste sinal os dois
+              discordavam: a entrada foi na contramão da tendência maior.
+            </p>
+            <p className="ra-btc-modal-nota">
+              O sinal não foi bloqueado de propósito. Sem registrar também os
+              contra, não haveria como comparar mais adiante se operar a favor
+              do drone realmente rende mais. A decisão de entrar continua sendo
+              sua.
+            </p>
+
+            <button type="button" onClick={() => setDroneInfo(null)}>
               Entendi
             </button>
           </div>

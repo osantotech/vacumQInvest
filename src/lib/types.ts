@@ -47,6 +47,19 @@ export interface Alert {
    * NULL no próprio BTC ou quando a medição está desligada.
    */
   correlacao_btc: number | null;
+  /**
+   * Drone — direção da PST no timeframe maior no instante do sinal.
+   *
+   * O método (Bruno Aguiar) usa o gráfico de 2h para confirmar a tendência e o
+   * de 30m para executar. O sinal contra o drone NÃO é bloqueado: ele chega
+   * marcado, porque bloquear apagaria a metade do dado que permite comparar,
+   * mais adiante, se operar a favor de fato performa melhor.
+   */
+  tendencia_htf: TendenciaHtf | null;
+  /** Timeframe consultado como drone — "120" para 2h. */
+  htf_timeframe: string | null;
+  /** true = a favor, false = contra, null = indefinido. null ≠ false. */
+  alinhado_htf: boolean | null;
   /** Snapshot do painel do indicador no instante do sinal. */
   painel: PainelSnapshot | null;
   /** Observação escrita pelo trader — a parte do diário que não se automatiza. */
@@ -57,6 +70,8 @@ export interface Alert {
 
 /** A partir daqui o sinal deixa de ser independente: é o BTC com outro nome. */
 export const CORRELACAO_BTC_ALTA = 0.85;
+
+export type TendenciaHtf = 'LONG' | 'SHORT' | 'INDEFINIDO';
 
 /**
  * O que o painel do indicador mostrava no instante do sinal.
@@ -69,6 +84,10 @@ export interface PainelSnapshot {
   baliz: string | null;
   estrutura: string | null;
   ote: string | null;
+  /** "A_FAVOR" | "CONTRA" | "INDEFINIDO" — o que o gráfico maior dizia. */
+  drone: string | null;
+  /** Timeframe do drone naquele sinal, caso ele mude com o tempo. */
+  drone_tf: string | null;
   sessoes: string | null;
   spread_pct: number | null;
   roe_pct: number | null;
@@ -159,6 +178,10 @@ export interface WebhookPayload {
   mercado_nota?: string;
   veredito?: string;
   correlacao_btc?: string;
+  tendencia_htf?: string;
+  htf_timeframe?: string;
+  /** Booleano JSON de verdade — o Pine monta sem aspas. */
+  alinhado_htf?: boolean | null;
   painel?: PainelSnapshot;
 }
 

@@ -37,6 +37,32 @@ function parseCorrelacao(raw: string | undefined): number | null {
 }
 
 /**
+ * Direção da PST no timeframe maior (o "drone" do método Bruno Aguiar).
+ * Só três valores são válidos; qualquer outra coisa vira null.
+ */
+function parseTendenciaHtf(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const v = raw.toUpperCase();
+  return v === 'LONG' || v === 'SHORT' || v === 'INDEFINIDO' ? v : null;
+}
+
+/**
+ * Alinhamento com o drone. Chega como booleano JSON (o Pine monta `true`,
+ * `false` ou `null` sem aspas), mas aceitamos string por segurança caso algum
+ * alerta antigo mande texto.
+ *
+ * null é significativo: quer dizer que o timeframe maior não tinha resposta,
+ * não que o sinal estava contra. Tratar os dois como false contaminaria
+ * justamente a comparação que essa coluna existe para permitir.
+ */
+function parseAlinhado(raw: unknown): boolean | null {
+  if (raw === true || raw === false) return raw;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return null;
+}
+
+/**
  * GET — ping de aquecimento.
  *
  * Na Vercel cada rota é uma função separada que "dorme" sem uso, e acordá-la
@@ -180,6 +206,11 @@ export async function POST(request: NextRequest) {
       // Fora de [-1, 1] só pode ser lixo: descartar é melhor que gravar um
       // número que a tela vai transformar num aviso de risco falso.
       correlacao_btc: parseCorrelacao(body.correlacao_btc),
+      // Drone: tendência do timeframe maior no instante do sinal.
+      tendencia_htf: parseTendenciaHtf(body.tendencia_htf),
+      htf_timeframe: body.htf_timeframe ?? null,
+      // NULL ≠ false: "não sei" não pode virar "está contra" na estatística.
+      alinhado_htf: parseAlinhado(body.alinhado_htf),
       // Snapshot do painel para o diário. Chega como objeto no JSON do Pine e
       // vai direto para a coluna jsonb, sem transformação.
       painel: body.painel ?? null,

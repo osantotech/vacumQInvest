@@ -70,6 +70,8 @@ const ROTULOS: Record<string, string> = {
   IMPULSO_ALTA_FORA: 'impulso de alta — fora',
   IMPULSO_BAIXA_FORA: 'impulso de baixa — fora',
   INDEFINIDO: 'indefinido',
+  A_FAVOR: 'a favor ✓',
+  CONTRA: 'CONTRA ⚠',
 };
 
 function rotulo(v: string | null | undefined): string {
@@ -77,11 +79,26 @@ function rotulo(v: string | null | undefined): string {
   return ROTULOS[v] ?? v;
 }
 
+/** "120" é o que o Pine grava; "2h" é o que o trader lê. */
+const NOMES_TF: Record<string, string> = {
+  '15': '15m', '30': '30m', '60': '1h', '120': '2h', '240': '4h', '480': '8h', D: '1D', W: '1S',
+};
+
+function nomeTf(tf: string): string {
+  return NOMES_TF[tf] ?? tf;
+}
+
 /** Classe de cor por gravidade do estado do painel. */
 function tomBaliz(v: string | null | undefined): string {
   if (v === 'SEGURE') return 'di-verde';
   if (v === 'ENFRAQUECENDO') return 'di-vermelho';
   if (v === 'ATENCAO') return 'di-amarelo';
+  return '';
+}
+
+function tomDrone(v: string | null | undefined): string {
+  if (v === 'A_FAVOR') return 'di-verde';
+  if (v === 'CONTRA') return 'di-laranja';
   return '';
 }
 
@@ -234,6 +251,10 @@ export default function Diario() {
                 {/* Painel do indicador no momento */}
                 {p && (
                   <div className="di-painel">
+                    <span>
+                      <i>Drone{p.drone_tf ? ` ${nomeTf(p.drone_tf)}` : ''}</i>{' '}
+                      <b className={tomDrone(p.drone)}>{rotulo(p.drone)}</b>
+                    </span>
                     <span><i>Balizador</i> <b className={tomBaliz(p.baliz)}>{rotulo(p.baliz)}</b></span>
                     <span><i>Estrutura</i> <b className={tomEstrutura(p.estrutura)}>{rotulo(p.estrutura)}</b></span>
                     <span><i>OTE</i> <b className={tomOte(p.ote)}>{rotulo(p.ote)}</b></span>
