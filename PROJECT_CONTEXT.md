@@ -3,7 +3,7 @@
 > **NUNCA apague este arquivo.** Ao iniciar uma sessão sem contexto, leia-o
 > primeiro. Ele descreve o estado real do sistema, não a intenção original.
 >
-> Última revisão: **02/08/2026**
+> Última revisão: **02/08/2026** (segunda atualização do dia — diário e auditoria do Pine)
 
 ---
 
@@ -58,6 +58,7 @@ campo Mensagem **vazio**, webhook apontando para `/api/webhook`.
 |---|---|
 | `/` Dashboard | 4 KPIs, curva de capital, últimos sinais, **painel de risco** |
 | `/resultados` | tabela das operações fechadas, alavancagem e capitais ajustáveis |
+| `/diario` | timeline por ativo com o painel de cada sinal + anotação livre |
 | `/rank` | desempenho por ativo, com filtro de mínimo de operações |
 | `/config` | perfil, sessão e **gerenciamento de acessos** (só admin) |
 
@@ -66,7 +67,7 @@ campo Mensagem **vazio**, webhook apontando para `/api/webhook`.
 | `/api/webhook` | `WEBHOOK_SECRET` no corpo, comparação em tempo constante |
 | `/api/scanner` | Bearer `CRON_SECRET` ou sessão |
 | `/api/results`, `/api/alerts`, `/api/stats` | sessão |
-| `/api/termos`, `/api/avisos` | sessão |
+| `/api/termos`, `/api/avisos`, `/api/diario` | sessão |
 | `/api/acessos` | sessão **+ admin**, verificado no servidor |
 
 ## 5. Banco (Supabase)
@@ -74,8 +75,14 @@ campo Mensagem **vazio**, webhook apontando para `/api/webhook`.
 `alerts` · `results` · `telegram_log` · `approved_emails` · `termos_aceite` ·
 `avisos_exibidos` · `scanner_watchlist` · `scanner_signals`
 
-Migrations aplicadas: **002** (correlação BTC), **003** (auditoria), **004**
-(coluna admin). A 001 foi descartada junto com o módulo 3X.
+Migrations aplicadas: **002** (correlação BTC), **003** (auditoria: termos e
+avisos), **004** (coluna admin), **005** (diário: `alerts.painel` jsonb e
+`alerts.anotacao`). A 001 foi descartada junto com o módulo 3X.
+
+O `painel` guarda o snapshot do indicador no instante do sinal — fase,
+balizador, estrutura, OTE, sessões, spread/ROE e as distâncias até SMA200, média
+amarela e PST. Valores **semânticos** (`SEGURE`), não o texto da tela
+(`SEGURE ✓`): o rótulo muda com o layout, o significado não.
 
 **Acesso administrativo:** dados via `SUPABASE_SERVICE_ROLE_KEY` do `.env.local`
 (script `.mjs` precisa rodar da raiz do projeto). DDL via `psql` — a senha está
@@ -113,6 +120,62 @@ A tela em Configurações faz as duas de uma vez. Admin atual:
   uma operação que a corretora já teria liquidado.
 - Preço: 2 casas acima de 10, 4 casas entre 1 e 10, casas reais abaixo de 1.
 
+## 8-B. Auditoria do Pine (02/08/2026)
+
+Relatório completo em `AUDITORIA_PINE_v1_8.md`. **14 achados.** O que o leitor
+futuro precisa saber sem abrir o relatório:
+
+**O que passou:** motor PST fiel ao algoritmo original; **sem repaint nos
+sinais** (`ta.pivothigh` gera atraso de confirmação, não reescrita do passado);
+**independência de ativo confirmada** — nenhuma comparação de preço contra
+constante em 1.000+ linhas; disparo único por ciclo.
+
+**Corrigido:**
+- **bug**: o aviso de estrutura (`exitWarn`) nunca se desarmava — ficava em
+  "TOPO MENOR ⚠ saída" até o flip, mesmo com a estrutura recomposta;
+- "corpo forte" tinha **dois limiares** (1.2× e 1.5×) para o mesmo conceito;
+- **ESTATISTICAS reescritas**: tinham cinco vieses somados, todos otimistas —
+  abriam no flip em vez dos sinais operados, perda no flip virava breakeven,
+  volta a zero após o alvo 1 contava como ganho, T1/T2/T3 classificavam por
+  excursão máxima e stops intra-bar eram ignorados. **O WR caiu de 35% para
+  17,6%** quando medido honestamente. Se aparecer print antigo com número
+  melhor, é a versão enviesada.
+
+**Não corrigido (decisão de método, não erro):** os fatores do score exigem
+coincidência na mesma vela; `f2` e `f5` são quase mutuamente exclusivos (teto
+prático do score é 4, não 5); o pullback é irreversível e fecha a porta do ED.
+
+**Duas descobertas que valem mais que o código:**
+
+1. **Existem DOIS Fibonaccis.** O do Score (âncora `pbRefHigh`→`swingBase`, zona
+   0.382-0.618, invisível) e o da tela (âncora nos pivôs do impulso, zona OTE
+   0.618-0.786). O Score **não** reflete a OTE desenhada. O guia tratava os dois
+   como a mesma coisa.
+
+2. **Impulso invertido ≡ balizador fraco.** `impDir` vem das médias, `pos` vem
+   da PST — e para um LONG, `impDir == -1` é exatamente a condição de
+   `balizOK == false`. Quando o Fibonacci aparece contra a posição, é o mesmo
+   aviso do balizador, dito noutro canto da tela. O código e o guia afirmavam
+   que isso nunca acontecia; ambos foram corrigidos.
+
+## 8-C. O que o "Após o aviso" mede
+
+Linha adicionada na tabela de ESTATISTICAS: guarda o spread no instante do
+primeiro aviso de cada operação (enfraquecimento ou topo menor/fundo maior) e
+compara com o resultado final.
+
+Primeira leitura real (NEARUSDT 30m, 102 ops): **93 ops · 26 melhoraram ·
+média +0,24%**.
+
+**Conclusão:** o aviso aparece em **91% das operações** — não discrimina nada.
+E a média positiva **não é estatisticamente significativa** (intervalo de 95%
+contém zero). Recomendação vigente: **não usar o aviso como gatilho de
+redução**; segurar até stop ou alvo, porque a assimetria (poucos ganhos grandes)
+é o que sustenta o sistema.
+
+Isso **inverteu** uma recomendação anterior minha, feita por suposição. Se a
+média migrar para −1% ou menos com a amostra maior, reavaliar.
+
 ## 9. Armadilhas já pagas — não repita
 
 1. **Coluna faltando derruba o webhook inteiro** (PostgREST 42703). Já aconteceu
@@ -129,12 +192,33 @@ A tela em Configurações faz as duas de uma vez. Admin atual:
    o envio do Telegram (esse custa 0,16s — medido).
 7. **`alertcondition` só manda texto** e o servidor responde 500. Só `alert()`
    monta JSON.
+8. **HTTP 200 do webhook não prova que o deploy subiu.** O código antigo também
+   responde 200 — ele apenas ignora o campo novo. A confirmação é consultar a
+   coluna no banco, nunca o status da requisição.
+9. **Agendador externo desativa job que acumula falha.** A primeira ideia de
+   aquecimento (POST com secret inválido, aproveitando o 401 rápido) teria se
+   matado sozinha em horas. Por isso o `GET /api/webhook` devolve 200.
 
 ## 10. Estado atual e pendências
 
-**Funcionando:** webhook, Telegram, correlação BTC, painel de risco, termo,
-trilha de auditoria, gerenciamento de acessos, scanner (respondendo, sem gravar
-em `alerts`).
+**Funcionando:** webhook, Telegram (bot `@VacumQI_ricos_bot`, chat privado),
+correlação BTC, painel de risco (com seletor isolado/cruzado e aviso de
+risco/retorno), diário com snapshot do painel, termo de aceite, trilha de
+auditoria, gerenciamento de acessos, ping de aquecimento (`GET /api/webhook`, a
+cada 5 min pelo cron-job.org), scanner (responde, mas ainda não grava em
+`alerts`).
+
+**10 alertas** armados no TradingView (limite de 20 no plano Essential).
+
+**Duas correções importantes no painel, ambas descobertas olhando a corretora
+real do usuário:**
+- o cálculo de liquidação assumia **margem isolada**; ele opera **cruzada**,
+  onde o saldo inteiro sustenta a posição (medido: liquidação a −74%, não a
+  −5%). Hoje há seletor, e no cruzado o aviso é suprimido em vez de inventar
+  número;
+- nenhuma tela olhava **risco/retorno**. A operação real dele tinha stop −5,01%
+  e alvo +2,49% (1 para 0,50), exigindo 67% de acerto para empatar contra um
+  histórico de 17,6%. O painel agora calcula o WR necessário.
 
 **Pendente:**
 - Substituir o termo por texto de advogado + política de privacidade (LGPD).
@@ -147,6 +231,15 @@ em `alerts`).
   tela mostraria ruído com cara de estatística.
 - O webhook casa a saída só por ativo, sem olhar timeframe. Se a mesma moeda
   rodar em dois timeframes, a saída de um fecha o alerta do outro.
+- **O scanner TypeScript não replica o Pine.** `analyzeVQPullback` usa
+  cruzamento de SMA 8/21 para detectar o flip; o Pine usa Pivot SuperTrend com
+  pivôs e ATR. O score também diverge (SMA8 lá, SMA21 aqui). Ligá-lo em
+  `alerts` como está misturaria dois sistemas na mesma tabela, sem forma de
+  saber qual linha veio de onde. Antes de escalar pelo scanner, ele precisa ser
+  reescrito — ou vale mais subir o plano do TradingView para Plus (100 alertas).
+- O bloco `alert()` do Pine dispara só na entrada e na saída. Capturar mudanças
+  no MEIO da operação (balizador virando, topo menor surgindo) exigiria alertas
+  adicionais, consumindo vagas do limite de 20.
 - `backend/` (Python, ccxt, smartmoneyconcepts) existe do desenho original e
   **não está no fluxo atual**.
 
