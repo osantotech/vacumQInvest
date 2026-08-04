@@ -1,0 +1,634 @@
+//@version=5
+// ============================================================================
+//  VacumQ_ModoGrecia  v1.5
+//  Método MAC (Bruno Aguiar) + contribuições do Sandro Ramos
+//
+//  MUDANÇAS v1.5 (scalp completo + painel compacto pra celular)
+//   1) SCALP COMPLETO migrado do Entrada e Saída (3 modos de saída testados):
+//      B-Trilha (default) / A-Alvo fixo / C-Reversão de vela.
+//      Stop apertado, contador P&L diário, lucro ao vivo + pico no painel.
+//      Usa squeeze como filtro (em vez de ADX) e macroBullish como direção.
+//   2) PAINEL COMPACTO (7 linhas em vez de 9): removido "Ambiente Bybit"
+//      (redundante — AÇÃO já mostra BLOQUEADO), nomes curtos, textos compactos.
+//      Cabe no celular e lê em 2 segundos.
+//   3) Alertas do scalp (entrada + realize + stop).
+//
+//  MUDANÇAS v1.4 (plano de correção pós-auditoria)
+//   1) TENDÊNCIA CONECTADA: o Passo A só arma se o crossover ocorrer com
+//      upTrend/dnTrend confirmados. Mata cruzamento falso em mercado sem rumo.
+//   2) PASSO B COM 2 CAMINHOS (OU):
+//        Caminho FORÇA .: preço rompe o breakoutLevel (momentum puro).
+//        Caminho FIBO ..: preço ENTRA na zona 0.382-0.618 e a REJEITA com
+//                         vela de força, sem romper o limite (0.618/0.786).
+//      ATENÇÃO (correção de auditoria): o gatilho é a REJEIÇÃO, não o toque.
+//      Sandro: "chega na 0.5, bate e volta. Se romper, é porque vai descer
+//      de vez." Entrar no toque = comprar faca caindo.
+//   3) CÓDIGO MORTO REMOVIDO (mid90D, localHigh, localLow, tpR e afins) e
+//      lookback macro AUTOCALIBRADO pelo timeframe do gráfico.
+//   4) LONGO SPREAD REALISTA: multiplicadores 5 / 10 / 15 (antes 20/50/100,
+//      alvos inatingíveis no 30m).
+//   5) SCALP INCOMPLETO REMOVIDO (entrada sem saída = armadilha).
+//   6) FIBONACCI AUTOMÁTICO: traça as 5 retrações do último swing e usa a
+//      zona saudável como filtro ativo do pullback.
+//   7) PAINEL DE TRANSPARÊNCIA DO FIBO: mostra o estado ("na zona",
+//      "rejeitou", "rompeu") para você VER a lógica, não confiar cego.
+//
+//  AVISO HONESTO: nenhum setup tem "95% de assertividade". Este indicador
+//  mede QUALIDADE DE SETUP segundo o método, não probabilidade de lucro.
+//  Calibre observando sinais antes de operar com dinheiro real.
+// ============================================================================
+indicator("VacumQ_ModoGrecia v1.5", shorttitle="VacumQ Grecia v1.5", overlay=true, max_lines_count=150, max_labels_count=100)
+
+// ============================================================================
+//                                CONFIGURAÇÕES
+// ============================================================================
+grpMA     = "1. Configuração do MAC (Bruno Aguiar)"
+lenWhite  = input.int(8, "SMA Branca (Momentum)", minval=1, group=grpMA)
+lenYellow = input.int(21, "SMA Amarela (Filtro de Tendência)", minval=1, group=grpMA)
+filterBars= input.int(3, "Velas de Tolerância na Amarela (Anti-Violinada)", minval=1, maxval=5, group=grpMA)
+
+grpMod    = "2. Alvos e Gestão de Risco (Sandro Ramos)"
+spreadMode= input.string("Médio Spread", "Horizonte de Lucro (Spread)", options=["Curto Spread", "Médio Spread", "Longo Spread"], group=grpMod)
+lev       = input.int(20, "Alavancagem Recomendada (Bybit)", minval=1, group=grpMod)
+slBuffer  = input.float(0.3, "Folga de Segurança do Stop (%)", minval=0.0, step=0.1, group=grpMod)
+
+grpPST    = "3. Configurações de Pivot (Stop Dinâmico)"
+pstPrd    = input.int(2, "Sensibilidade do Pivot", minval=1, group=grpPST)
+pstFactor = input.float(3.0, "Fator de Volatilidade (ATR)", minval=0.1, step=0.1, group=grpPST)
+pstATR    = input.int(10, "Período ATR", minval=1, group=grpPST)
+
+grpSqz    = "4. Filtro de Segurança (Anti-Lateralidade)"
+useSqueeze= input.bool(true, "Bloquear Operações em Lateralização", group=grpSqz)
+bbLen     = input.int(20, "Período Bollinger", group=grpSqz)
+bbMult    = input.float(2.0, "Desvio Bollinger", step=0.1, group=grpSqz)
+kcLen     = input.int(20, "Período Keltner", group=grpSqz)
+kcMult    = input.float(1.5, "Desvio Keltner (ATR)", step=0.1, group=grpSqz)
+
+grpFib    = "5. Fibonacci Automático (Sandro) — filtro de pullback"
+useFib      = input.bool(true, "Usar Fibonacci como caminho de confirmação", group=grpFib)
+showFibLines= input.bool(true, "Plotar as 5 linhas de Fibonacci do swing", group=grpFib)
+swingPrd    = input.int(5, "Sensibilidade do swing (topo/fundo)", minval=2, group=grpFib)
+fibZoneTop  = input.float(0.382, "Início da zona saudável", step=0.001, group=grpFib)
+fibZoneBot  = input.float(0.618, "Fim da zona saudável (Golden Pocket)", step=0.001, group=grpFib)
+fibLimite   = input.float(0.786, "Limite: romper aqui invalida o setup", step=0.001, group=grpFib)
+fibForcaMin = input.float(1.0, "Força mínima da vela de rejeição (x corpo médio)", minval=0.1, step=0.1, group=grpFib)
+
+grpVis    = "6. Sinalizadores Visuais"
+showPbDots= input.bool(true, "Mostrar Bolinhas Laranjas de Pullback (Atenção)", group=grpVis)
+
+// ============================================================================
+//              ENGINE MACRO — lookback AUTOCALIBRADO pelo timeframe
+// ============================================================================
+int tfMin = math.max(1, math.round(timeframe.in_seconds() / 60))
+int lookback90D = math.min(5000, math.max(50, math.round(90 * 1440 / tfMin)))
+
+float hi90 = ta.highest(high, lookback90D)
+float lo90 = ta.lowest(low, lookback90D)
+float pos90 = (hi90 > lo90) ? (close - lo90) / (hi90 - lo90) * 100.0 : na
+
+float smaMacro = ta.sma(close, 200)
+macroBullish = close > smaMacro and smaMacro >= smaMacro[1]
+macroBearish = close < smaMacro and smaMacro <= smaMacro[1]
+
+string macroClima = macroBullish ? "ALTA" : macroBearish ? "BAIXA" : "SEM RUMO"
+color climaColBG = macroBullish ? color.lime : macroBearish ? color.red : color.orange
+color climaColTX = macroBullish ? color.black : macroBearish ? color.white : color.black
+
+// ============================================================================
+//                    PIVOT SUPERTREND (MECANISMO DE STOP)
+// ============================================================================
+float ph  = ta.pivothigh(pstPrd, pstPrd)
+float pl  = ta.pivotlow(pstPrd, pstPrd)
+var float center = na
+float lastpp = not na(ph) ? ph : not na(pl) ? pl : na
+if not na(lastpp)
+    center := na(center) ? lastpp : (center * 2 + lastpp) / 3
+float atrPST = ta.atr(pstATR)
+float Up = center - pstFactor * atrPST
+float Dn = center + pstFactor * atrPST
+var float TUp = na
+var float TDn = na
+var int   TrendP = 1
+TUp := (not na(TUp[1]) and close[1] > TUp[1]) ? math.max(Up, TUp[1]) : Up
+TDn := (not na(TDn[1]) and close[1] < TDn[1]) ? math.min(Dn, TDn[1]) : Dn
+TrendP := (not na(TDn[1]) and close > TDn[1]) ? 1 : (not na(TUp[1]) and close < TUp[1]) ? -1 : nz(TrendP[1], 1)
+float pstLine = TrendP == 1 ? TUp : TDn
+
+// ============================================================================
+//                       BASES: MÉDIAS, TENDÊNCIA, SQUEEZE
+// ============================================================================
+smaW = ta.sma(close, lenWhite)
+smaY = ta.sma(close, lenYellow)
+
+upTrend = (close > smaY) and (smaW > smaY) and (smaY >= smaY[1])
+dnTrend = (close < smaY) and (smaW < smaY) and (smaY <= smaY[1])
+
+basis = ta.sma(close, bbLen)
+dev   = bbMult * ta.stdev(close, bbLen)
+upperBB = basis + dev
+lowerBB = basis - dev
+maKC = ta.ema(close, kcLen)
+rangeATR = ta.atr(kcLen)
+upperKC = maKC + (rangeATR * kcMult)
+lowerKC = maKC - (rangeATR * kcMult)
+isSqueezed = useSqueeze and (lowerBB > lowerKC) and (upperBB < upperKC)
+
+float corpo    = math.abs(close - open)
+float corpoMed = ta.sma(math.abs(close - open), 10)
+bool velaForte = corpo >= corpoMed * fibForcaMin
+
+// ============================================================================
+//              FIBONACCI AUTOMÁTICO DO ÚLTIMO SWING (item 6)
+// ============================================================================
+float swHigh = ta.pivothigh(swingPrd, swingPrd)
+float swLow  = ta.pivotlow(swingPrd, swingPrd)
+var float fibTopo  = na
+var float fibFundo = na
+if not na(swHigh)
+    fibTopo := swHigh
+if not na(swLow)
+    fibFundo := swLow
+
+bool fibOk = not na(fibTopo) and not na(fibFundo) and fibTopo > fibFundo
+float fibRange = fibOk ? fibTopo - fibFundo : na
+
+float f236 = fibOk ? fibTopo - fibRange * 0.236 : na
+float f382 = fibOk ? fibTopo - fibRange * fibZoneTop : na
+float f500 = fibOk ? fibTopo - fibRange * 0.500 : na
+float f618 = fibOk ? fibTopo - fibRange * fibZoneBot : na
+float f786 = fibOk ? fibTopo - fibRange * fibLimite : na
+
+// ============================================================================
+//                    ENGINE DE ENTRADA — PASSO A (armar)
+// ============================================================================
+var float breakoutLevel = na
+var bool  stepA_Active = false
+var int   stepA_Direction = 0
+var int   candleCountSinceA = 0
+
+bool armaLong  = ta.crossover(close, smaY)  and upTrend and not isSqueezed
+bool armaShort = ta.crossunder(close, smaY) and dnTrend and not isSqueezed
+
+if armaLong
+    stepA_Active := true
+    stepA_Direction := 1
+    breakoutLevel := high
+    candleCountSinceA := 0
+if armaShort
+    stepA_Active := true
+    stepA_Direction := -1
+    breakoutLevel := low
+    candleCountSinceA := 0
+
+// ============================================================================
+//         ENGINE DE ENTRADA — PASSO B (confirmar): FORÇA  OU  FIBO
+// ============================================================================
+var bool  fibZonaTocadaLong  = false
+var bool  fibZonaTocadaShort = false
+
+bool stepB_Confirmed = false
+bool viaForca = false
+bool viaFibo  = false
+bool isPullbackActiveLong  = false
+bool isPullbackActiveShort = false
+bool fibRompeu = false
+
+if stepA_Active
+    candleCountSinceA := candleCountSinceA + 1
+
+    if stepA_Direction == 1
+        isPullbackActiveLong := low <= smaY * 1.005 and close > smaY
+        if useFib and fibOk and low <= f382 and low >= f618
+            fibZonaTocadaLong := true
+        if useFib and fibOk and close < f786
+            fibRompeu := true
+            stepA_Active := false
+            fibZonaTocadaLong := false
+        if isPullbackActiveLong[1] and close > breakoutLevel
+            viaForca := true
+        if useFib and fibOk and fibZonaTocadaLong and close > f382 and close > open and velaForte
+            viaFibo := true
+        if viaForca or viaFibo
+            stepB_Confirmed := true
+            stepA_Active := false
+            fibZonaTocadaLong := false
+
+    if stepA_Direction == -1
+        isPullbackActiveShort := high >= smaY * 0.995 and close < smaY
+        if useFib and fibOk and high >= f382 and high <= f618
+            fibZonaTocadaShort := true
+        if useFib and fibOk and close > f786
+            fibRompeu := true
+            stepA_Active := false
+            fibZonaTocadaShort := false
+        if isPullbackActiveShort[1] and close < breakoutLevel
+            viaForca := true
+        if useFib and fibOk and fibZonaTocadaShort and close < f382 and close < open and velaForte
+            viaFibo := true
+        if viaForca or viaFibo
+            stepB_Confirmed := true
+            stepA_Active := false
+            fibZonaTocadaShort := false
+
+if not stepA_Active
+    candleCountSinceA := 0
+if candleCountSinceA > 10
+    stepA_Active := false
+    fibZonaTocadaLong := false
+    fibZonaTocadaShort := false
+
+// ============================================================================
+//                  CÁLCULO E GESTÃO DE EXECUÇÃO & TARGETS
+// ============================================================================
+var float opE   = na
+var float opSL  = na
+var float opTP1 = na
+var float opTP2 = na
+var float opTP3 = na
+var int   opDir = 0
+var string opVia = ""
+
+float tm1 = 2.0
+float tm2 = 5.0
+float tm3 = 10.0
+if spreadMode == "Curto Spread"
+    tm1 := 1.0
+    tm2 := 1.5
+    tm3 := 2.0
+else if spreadMode == "Médio Spread"
+    tm1 := 2.0
+    tm2 := 5.0
+    tm3 := 10.0
+else if spreadMode == "Longo Spread"
+    tm1 := 5.0
+    tm2 := 10.0
+    tm3 := 15.0
+
+if stepB_Confirmed and opDir == 0
+    opDir := stepA_Direction
+    opE   := close
+    opVia := viaFibo ? "FIBO (rejeição)" : "FORÇA (rompimento)"
+    if opDir == 1
+        opSL := math.min(low, smaY) * (1 - slBuffer/100)
+    else
+        opSL := math.max(high, smaY) * (1 + slBuffer/100)
+
+    float riskDist = math.abs(opE - opSL)
+    if opDir == 1
+        opTP1 := opE + riskDist * tm1
+        opTP2 := opE + riskDist * tm2
+        opTP3 := opE + riskDist * tm3
+    else
+        opTP1 := opE - riskDist * tm1
+        opTP2 := opE - riskDist * tm2
+        opTP3 := opE - riskDist * tm3
+
+var bool tp1_Reached = false
+if opDir == 1 and high >= opTP1
+    tp1_Reached := true
+if opDir == -1 and low <= opTP1
+    tp1_Reached := true
+if opDir != 0 and tp1_Reached
+    opSL := pstLine
+
+var int closeCountLong = 0
+var int closeCountShort = 0
+if close < smaY
+    closeCountLong := closeCountLong + 1
+else
+    closeCountLong := 0
+if close > smaY
+    closeCountShort := closeCountShort + 1
+else
+    closeCountShort := 0
+
+exitLongConfirmed  = closeCountLong  >= filterBars
+exitShortConfirmed = closeCountShort >= filterBars
+
+if opDir == 1 and (low <= opSL or high >= opTP3 or exitLongConfirmed)
+    opDir := 0
+    tp1_Reached := false
+if opDir == -1 and (high >= opSL or low <= opTP3 or exitShortConfirmed)
+    opDir := 0
+    tp1_Reached := false
+
+// ============================================================================
+//            CONTADOR DE EXAUSTÃO CÍCLICA (IDEIA DO SANDRO)
+// ============================================================================
+var int consecBars = 0
+bool isVelaAlta  = close > open and close > smaY
+bool isVelaBaixa = close < open and close < smaY
+if isVelaAlta
+    consecBars := isVelaAlta[1] ? consecBars + 1 : 1
+else if isVelaBaixa
+    consecBars := isVelaBaixa[1] ? consecBars + 1 : 1
+else
+    consecBars := 0
+
+string probText = "Normal (ciclo jovem)"
+color  probColorBG = color.lime
+color  probColorTX = color.black
+if consecBars == 3
+    probText := "Atenção — ciclo maduro"
+    probColorBG := color.yellow
+    probColorTX := color.black
+else if consecBars == 4
+    probText := "Retorno provável"
+    probColorBG := color.orange
+    probColorTX := color.black
+else if consecBars >= 5
+    probText := "Exaustão — repique provável"
+    probColorBG := color.red
+    probColorTX := color.white
+
+
+// ============================================================================
+//      MODO SCALP (migrado do Entrada e Saída — 3 modos de saída testados)
+// ============================================================================
+grpScalp    = "7. Modo Scalp (opcional · contra-tendência · desligado por padrão)"
+useScalp    = input.bool(false, "Ativar Modo Scalp", group=grpScalp)
+scalpModo   = input.string("B - Trilha", "Modo de saída", options=["B - Trilha", "A - Alvo fixo", "C - Reversão de vela"], group=grpScalp)
+scalpMinPct = input.float(0.8, "Micro-oscilação mínima (%)", minval=0.1, step=0.1, group=grpScalp)
+scalpRR     = input.float(1.5, "Alvo em R (modo A)", minval=0.5, step=0.1, group=grpScalp)
+scalpTrailPct = input.float(0.3, "Trilha: reversão % (modo B)", minval=0.1, step=0.1, group=grpScalp)
+scalpStopBuf = input.float(0.5, "Stop do scalp (%)", minval=0.1, step=0.05, group=grpScalp)
+scalpCVelas  = input.int(2, "Modo C: velas contrárias p/ sair", minval=1, group=grpScalp)
+scalpCLucroMin = input.float(0.3, "Modo C: lucro mínimo % p/ sair", minval=0.0, step=0.1, group=grpScalp)
+
+bool scalpModoB = scalpModo == "B - Trilha"
+bool scalpModoA = scalpModo == "A - Alvo fixo"
+bool scalpModoC = scalpModo == "C - Reversão de vela"
+
+float scDropPct = (open - close) / open * 100.0
+float scRisePct = (close - open) / open * 100.0
+bool scalpShortSig = useScalp and not isSqueezed and macroBullish and close < open and scDropPct >= scalpMinPct and opDir == 0
+bool scalpLongSig  = useScalp and not isSqueezed and macroBearish and close > open and scRisePct >= scalpMinPct and opDir == 0
+
+var int   scalpState   = 0
+var float scalpEntry   = na
+var float scalpStop    = na
+var float scalpTarget  = na
+var float scalpBest    = na
+var int   scCandleCount= 0
+var int   scalpWins    = 0
+var int   scalpLoss    = 0
+var int   scalpZero    = 0
+var float scalpPnl     = 0.0
+
+if ta.change(time("D")) != 0
+    scalpWins := 0
+    scalpLoss := 0
+    scalpZero := 0
+    scalpPnl  := 0.0
+
+bool scRealize = false
+bool scStop    = false
+bool scRespiro = false
+
+if scalpState == -1
+    scalpBest := na(scalpBest) ? low : math.min(scalpBest, low)
+    if close > open
+        scCandleCount := scCandleCount + 1
+    else
+        scCandleCount := 0
+    float scExit = na
+    float scLucroPct = (scalpEntry - close) / scalpEntry * 100.0
+    if high >= scalpStop
+        scStop := true
+        scExit := scalpStop
+    else if scalpModoB and close >= scalpBest * (1 + scalpTrailPct/100.0)
+        scRealize := true
+        scExit := close
+    else if scalpModoA and low <= scalpTarget
+        scRealize := true
+        scExit := scalpTarget
+    else if scalpModoA and close > open and velaForte
+        scRespiro := true
+        scExit := close
+    else if scalpModoC and scCandleCount >= scalpCVelas and scLucroPct >= scalpCLucroMin
+        scRealize := true
+        scExit := close
+    if scStop or scRealize or scRespiro
+        scalpPnl := scalpPnl + (scalpEntry - scExit) / scalpEntry * 100.0 * lev
+        scalpState := 0
+    if scStop
+        scalpLoss := scalpLoss + 1
+    if scRealize
+        scalpWins := scalpWins + 1
+    if scRespiro
+        scalpZero := scalpZero + 1
+
+if scalpState == 1
+    scalpBest := na(scalpBest) ? high : math.max(scalpBest, high)
+    if close < open
+        scCandleCount := scCandleCount + 1
+    else
+        scCandleCount := 0
+    float scExit = na
+    float scLucroPct = (close - scalpEntry) / scalpEntry * 100.0
+    if low <= scalpStop
+        scStop := true
+        scExit := scalpStop
+    else if scalpModoB and close <= scalpBest * (1 - scalpTrailPct/100.0)
+        scRealize := true
+        scExit := close
+    else if scalpModoA and high >= scalpTarget
+        scRealize := true
+        scExit := scalpTarget
+    else if scalpModoA and close < open and velaForte
+        scRespiro := true
+        scExit := close
+    else if scalpModoC and scCandleCount >= scalpCVelas and scLucroPct >= scalpCLucroMin
+        scRealize := true
+        scExit := close
+    if scStop or scRealize or scRespiro
+        scalpPnl := scalpPnl + (scExit - scalpEntry) / scalpEntry * 100.0 * lev
+        scalpState := 0
+    if scStop
+        scalpLoss := scalpLoss + 1
+    if scRealize
+        scalpWins := scalpWins + 1
+    if scRespiro
+        scalpZero := scalpZero + 1
+
+if scalpShortSig and scalpState == 0
+    scalpState := -1
+    scalpEntry := close
+    scalpStop := scalpEntry * (1 + scalpStopBuf/100.0)
+    float scRiscoS = scalpStop - scalpEntry
+    scalpTarget := scalpEntry - scRiscoS * scalpRR
+    scalpBest := low
+    scCandleCount := 0
+if scalpLongSig and scalpState == 0
+    scalpState := 1
+    scalpEntry := close
+    scalpStop := scalpEntry * (1 - scalpStopBuf/100.0)
+    float scRiscoL = scalpEntry - scalpStop
+    scalpTarget := scalpEntry + scRiscoL * scalpRR
+    scalpBest := high
+    scCandleCount := 0
+
+// ============================================================================
+//                        PLOTAGENS VISUAIS (v1.5 compacta)
+// ============================================================================
+plot(smaW, "SMA Branca", color=color.new(color.white, 20), linewidth=1, display=display.pane)
+plot(smaY, "SMA Amarela", color=color.new(color.yellow, 10), linewidth=2, display=display.pane)
+plot(pstLine, "PST", color=TrendP == 1 ? color.green : color.red, linewidth=1, style=plot.style_linebr, display=display.pane)
+
+bgcolor(isSqueezed ? color.new(color.red, 95) : na, title="Fundo de Squeeze")
+
+plot(showFibLines and fibOk ? f236 : na, "Fib 0.236", color=color.new(color.red, 30),    style=plot.style_linebr, display=display.pane)
+plot(showFibLines and fibOk ? f382 : na, "Fib 0.382", color=color.new(color.orange, 20), style=plot.style_linebr, display=display.pane)
+plot(showFibLines and fibOk ? f500 : na, "Fib 0.500", color=color.new(color.white, 30),  style=plot.style_linebr, display=display.pane)
+plot(showFibLines and fibOk ? f618 : na, "Fib 0.618", color=color.new(color.aqua, 20),   style=plot.style_linebr, display=display.pane)
+plot(showFibLines and fibOk ? f786 : na, "Fib 0.786", color=color.new(color.purple, 20), style=plot.style_linebr, display=display.pane)
+
+plotshape(showPbDots and (isPullbackActiveLong or isPullbackActiveShort) and opDir == 0, "Pullback", style=shape.circle, location=location.belowbar, color=color.new(color.orange, 0), size=size.tiny, display=display.pane)
+plotshape(stepB_Confirmed and stepA_Direction == 1,  "LONG",  style=shape.triangleup,   location=location.belowbar, color=color.new(color.green, 0), size=size.small, display=display.pane)
+plotshape(stepB_Confirmed and stepA_Direction == -1, "SHORT", style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0),   size=size.small, display=display.pane)
+plotshape(fibRompeu, "Fibo rompido", style=shape.xcross, location=location.abovebar, color=color.new(color.purple, 0), size=size.tiny, display=display.pane)
+
+plotshape(useScalp and scalpShortSig and scalpState == -1, "Scalp short", style=shape.triangledown, location=location.abovebar, color=color.new(color.yellow, 0), size=size.tiny, text="s", textcolor=color.new(color.yellow, 0), display=display.pane)
+plotshape(useScalp and scalpLongSig and scalpState == 1,   "Scalp long",  style=shape.triangleup,   location=location.belowbar, color=color.new(color.yellow, 0), size=size.tiny, text="s", textcolor=color.new(color.yellow, 0), display=display.pane)
+plotshape(useScalp and scRealize, "Scalp realize", style=shape.circle, location=location.belowbar, color=color.new(color.teal, 0), size=size.tiny, display=display.pane)
+plotshape(useScalp and (scStop or scRespiro), "Scalp saída", style=shape.xcross, location=location.abovebar, color=color.new(color.gray, 0), size=size.tiny, display=display.pane)
+
+plot(opDir != 0 ? opE   : na, "Entrada", color=color.new(color.gray, 50), style=plot.style_linebr, display=display.pane)
+plot(opDir != 0 ? opSL  : na, "Stop", color=color.new(color.red, 10), style=plot.style_linebr, linewidth=2, display=display.pane)
+plot(opDir != 0 ? opTP1 : na, "TP1", color=color.new(color.green, 40), style=plot.style_linebr, display=display.pane)
+plot(opDir != 0 ? opTP2 : na, "TP2", color=color.new(color.green, 30), style=plot.style_linebr, display=display.pane)
+plot(opDir != 0 ? opTP3 : na, "TP3", color=color.new(color.green, 10), style=plot.style_linebr, linewidth=2, display=display.pane)
+
+// ============================================================================
+//           PAINEL DE DECISÃO v1.5 (compacto · 9 linhas · celular-friendly)
+// ============================================================================
+color darkHeader = #131722
+color darkRow    = #1e222d
+color darkRowSub = #2a2e39
+
+string fibTxt = "—"
+color  fibBg  = darkRowSub
+color  fibTx  = color.gray
+if not useFib
+    fibTxt := "desligado"
+else if not fibOk
+    fibTxt := "aguardando swing"
+else if fibRompeu
+    fibTxt := "ROMPEU — morto"
+    fibBg  := color.purple
+    fibTx  := color.white
+else if stepB_Confirmed and viaFibo
+    fibTxt := "REJEITOU — entrada!"
+    fibBg  := color.lime
+    fibTx  := color.black
+else if fibZonaTocadaLong or fibZonaTocadaShort
+    fibTxt := "NA ZONA — aguarde"
+    fibBg  := color.orange
+    fibTx  := color.black
+else if stepA_Active
+    fibTxt := "armado — esperando"
+    fibTx  := color.silver
+else
+    fibTxt := str.tostring(f618, format.mintick) + " – " + str.tostring(f382, format.mintick)
+    fibTx  := color.silver
+
+string scalpTxt = "—"
+color  scalpCol = color.gray
+float scalpNowPct  = scalpState == -1 ? (scalpEntry - close) / scalpEntry * 100.0 : scalpState == 1 ? (close - scalpEntry) / scalpEntry * 100.0 : na
+float scalpPeakPct = scalpState == -1 ? (scalpEntry - scalpBest) / scalpEntry * 100.0 : scalpState == 1 ? (scalpBest - scalpEntry) / scalpEntry * 100.0 : na
+string scalpCvTxt = scalpModoC ? " c" + str.tostring(scCandleCount) + "/" + str.tostring(scalpCVelas) : ""
+if not useScalp
+    scalpTxt := "desligado"
+else if scRealize
+    scalpTxt := "REALIZE!"
+    scalpCol := color.new(color.teal, 0)
+else if scStop
+    scalpTxt := "STOP!"
+    scalpCol := color.red
+else if scRespiro
+    scalpTxt := "respiro — saia"
+    scalpCol := color.silver
+else if scalpState != 0 and not na(scalpNowPct)
+    scalpTxt := (scalpState == -1 ? "S " : "L ") + (scalpNowPct >= 0 ? "+" : "") + str.tostring(scalpNowPct, "#.#") + "% pico+" + str.tostring(math.max(nz(scalpPeakPct, 0), 0), "#.#") + "%" + scalpCvTxt
+    scalpCol := color.new(color.yellow, 0)
+else
+    scalpTxt := "aguardando"
+    scalpCol := color.silver
+
+int scDecididos = scalpWins + scalpLoss
+string scWR = scDecididos > 0 ? " (" + str.tostring(scalpWins / scDecididos * 100, "#") + "%)" : ""
+string scPnlTxt = (scalpPnl >= 0 ? "+" : "") + str.tostring(scalpPnl, "#.#") + "%"
+string scCountTxt = useScalp ? scPnlTxt + " " + str.tostring(scalpWins) + "/" + str.tostring(scalpLoss) + "/" + str.tostring(scalpZero) + scWR : "—"
+color  scCntCol = not useScalp ? color.gray : scalpPnl > 0 ? color.lime : scalpPnl < 0 ? color.red : color.silver
+
+string acaoText = "AGUARDE"
+color  acaoBg   = darkRowSub
+color  acaoTx   = color.white
+if isSqueezed
+    acaoText := "BLOQUEADO"
+    acaoBg   := color.red
+    acaoTx   := color.white
+else if opDir == 1
+    acaoText := "SEGURE ▲"
+    acaoBg   := color.lime
+    acaoTx   := color.black
+else if opDir == -1
+    acaoText := "SEGURE ▼"
+    acaoBg   := color.red
+    acaoTx   := color.white
+else if stepB_Confirmed and stepA_Direction == 1
+    acaoText := "COMPRE ▲"
+    acaoBg   := color.lime
+    acaoTx   := color.black
+else if stepB_Confirmed and stepA_Direction == -1
+    acaoText := "VENDA ▼"
+    acaoBg   := color.red
+    acaoTx   := color.white
+else if isPullbackActiveLong or isPullbackActiveShort
+    acaoText := "PREPARANDO"
+    acaoBg   := color.orange
+    acaoTx   := color.black
+
+string mareTxt = macroClima + (not na(pos90) ? " · " + str.tostring(pos90, "#") + "%" : "")
+
+string riskTxt = opDir != 0 ? "-" + str.tostring(math.abs(opE - opSL) / opE * 100 * lev, "#.#") + "% · " + opVia : "—"
+color  riskBg  = opDir != 0 ? color.red : darkRowSub
+color  riskTx  = opDir != 0 ? color.white : color.gray
+
+string alvoTxt = opDir != 0 ? "TP3 +" + str.tostring(math.abs(opTP3 - opE) / opE * 100 * lev, "#.#") + "%" : "—"
+color  alvoBg  = opDir != 0 ? color.lime : darkRowSub
+color  alvoTx  = opDir != 0 ? color.black : color.gray
+
+string cicloTxt = consecBars > 0 ? str.tostring(consecBars) + " velas" : "início"
+
+var table t = table.new(position.top_right, 2, 9, border_width=1, frame_color=color.new(color.gray, 40), frame_width=1)
+if barstate.islast
+    table.cell(t, 0, 0, "VACUMQ GRÉCIA", text_color=color.white, bgcolor=darkHeader, text_size=size.small)
+    table.cell(t, 1, 0, "v1.5", text_color=color.white, bgcolor=darkHeader, text_size=size.small)
+    table.cell(t, 0, 1, "AÇÃO", text_color=color.white, bgcolor=darkRow, text_size=size.small)
+    table.cell(t, 1, 1, acaoText, text_color=acaoTx, bgcolor=acaoBg, text_size=size.normal)
+    table.cell(t, 0, 2, "Maré", text_color=color.white, bgcolor=darkRow, text_size=size.small)
+    table.cell(t, 1, 2, mareTxt, text_color=climaColTX, bgcolor=climaColBG, text_size=size.small)
+    table.cell(t, 0, 3, "Fibo", text_color=color.white, bgcolor=darkRow, text_size=size.small)
+    table.cell(t, 1, 3, fibTxt, text_color=fibTx, bgcolor=fibBg, text_size=size.small)
+    table.cell(t, 0, 4, "Risco", text_color=color.white, bgcolor=darkRow, text_size=size.small)
+    table.cell(t, 1, 4, riskTxt, text_color=riskTx, bgcolor=riskBg, text_size=size.small)
+    table.cell(t, 0, 5, "Alvo", text_color=color.white, bgcolor=darkRow, text_size=size.small)
+    table.cell(t, 1, 5, alvoTxt, text_color=alvoTx, bgcolor=alvoBg, text_size=size.small)
+    table.cell(t, 0, 6, "Exaustão", text_color=color.white, bgcolor=darkRow, text_size=size.small)
+    table.cell(t, 1, 6, cicloTxt + " · " + probText, text_color=probColorTX, bgcolor=probColorBG, text_size=size.small)
+    table.cell(t, 0, 7, "Scalp", text_color=color.white, bgcolor=color.new(color.olive, 40), text_size=size.small)
+    table.cell(t, 1, 7, scalpTxt, text_color=scalpCol, bgcolor=color.new(color.olive, 40), text_size=size.small)
+    table.cell(t, 0, 8, "Scalp dia", text_color=color.white, bgcolor=color.new(color.olive, 55), text_size=size.small)
+    table.cell(t, 1, 8, scCountTxt, text_color=scCntCol, bgcolor=color.new(color.olive, 55), text_size=size.small)
+
+// ============================================================================
+//                                 ALERTAS
+// ============================================================================
+alertcondition(stepB_Confirmed and stepA_Direction == 1,  title="LONG confirmado",  message="VacumQ: COMPRE confirmado")
+alertcondition(stepB_Confirmed and stepA_Direction == -1, title="SHORT confirmado", message="VacumQ: VENDA confirmada")
+alertcondition(fibRompeu, title="Fibo rompido", message="VacumQ: Fibo rompeu o limite — setup morto")
+alertcondition(consecBars >= 5, title="Exaustão cíclica", message="VacumQ: 5+ velas — repique provável")
+alertcondition(scalpShortSig or scalpLongSig, title="Scalp — entrada", message="VacumQ: scalp detectado (micro-oscilação)")
+alertcondition(scRealize, title="Scalp — realize", message="VacumQ: scalp atingiu alvo — realize")
+alertcondition(scStop,    title="Scalp — stop", message="VacumQ: scalp atingiu stop — saia")
