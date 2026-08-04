@@ -1,0 +1,677 @@
+//@version=5
+indicator("ES Rompimentos SMAs B&A v1.3", "ES_B&A v1.3", overlay=true, max_labels_count=500, max_lines_count=100)
+
+// ══════════════════════════════════════════════════════════════════════════
+// INDICADOR 3 — ES Rompimentos SMAs Branca & Amarela v1.3
+// ──────────────────────────────────────────────────────────────────────────
+// ES = Entrada e Saida com as SMAs Branca e Amarela.
+//
+// Baseado exclusivamente na aula:
+//   MAC3.0 — Como entrar e sair de uma operacao (Bruno Aguiar)
+//
+// PROPOSITO: sao as "rodinhas de bicicleta" do usuario leigo. Ele aprende a
+// entrar e sair lendo o painel e os sinais, ate conseguir ler o grafico
+// sozinho e nao precisar mais deste indicador.
+//
+// Isso muda o criterio de projeto: o painel nao existe para dar diagnostico
+// de mercado, existe para responder "o que eu faco com o meu dinheiro agora".
+// E — como a rodinha de bicicleta boa — nao esconde o risco: deixa o erro
+// acontecer barato e explicado.
+//
+// Ciclo operacional (auditado do video):
+//   1. Candle FECHA acima da SMA amarela  → ENTRADA LONG  (seta verde grande)
+//   2. Segure enquanto amarela nao for rompida no contrario
+//   3. Candle FECHA abaixo da SMA amarela → SAIDA LONG + ENTRADA SHORT (flip)
+//   4. Repete
+//
+// Regra Bruno [01:27]: "Rompeu, fechou acima — ou rompeu pra baixo, fechou abaixo"
+// Regra Bruno [20:21]: "Rompeu e voltou pra baixo, nao fechou acima da amarela"
+// Regra Bruno [21:41]: "Enquanto nao romper a amarela, continua na operacao"
+// Regra Bruno [22:05]: "Voce nao so sai da operacao, voce entra novamente"
+// Regra Bruno [23:21]: "Se o rompimento e com forca, mais certo ainda"
+// TF recomendado Bruno [17:36]: Grafico de 2 horas (MAC)
+//
+// ── HISTORICO ──
+// v1.0: motor de deteccao (rompimento amarela/branca, flip, forca, painel)
+// v1.1: falso rompimento corrigido, zCritica removida, tamanho WEB/Celular
+// v1.2: auditoria de 04/08/2026 + as "rodinhas" pedagogicas
+//
+//   CORRIGIDO
+//   - WEB/Celular estava INVERTIDO: escolher WEB entregava o tamanho pequeno.
+//     Agora WEB = maior/legivel no monitor, Celular = compacto (mesma logica ja
+//     corrigida no VQ_Pullback_v1_9).
+//   - "CRITICA ⚠" aparecia mesmo sem dado nenhum nas primeiras 21 velas.
+//   - A zona dizia "NAO ENTRE" enquanto a seta verde grande dizia "ENTRE".
+//     Medido: acontecia em 87 de 618 sinais (14,1%). O texto agora DESCREVE a
+//     zona em vez de dar ordem contraria ao gatilho. Nenhum sinal foi filtrado:
+//     os sinais em zona critica nao se mostraram piores (diferenca de -0,163%,
+//     dentro do intervalo de confianca), entao remove-los seria descartar 14%
+//     das entradas sem evidencia.
+//   - Rodape declarava v1.0 num arquivo v1.1.
+//
+//   NOVO — as rodinhas
+//   - AGORA: uma linha dizendo o que fazer, no topo do painel.
+//   - VELA ABERTA/FECHADA + minutos restantes. O erro nº1 do iniciante e
+//     entrar antes do fechamento; a v1.1 so marcava o falso DEPOIS que passava.
+//   - SAI SE FECHAR: o PRECO exato do gatilho de saida (a amarela), nao so a
+//     distancia em %. E o numero que se leva para a corretora.
+//   - SPREAD ao vivo. O guia diz "voce segura e captura o spread" — e o painel
+//     nao mostrava o spread.
+//   - POR QUE: o motivo do sinal em uma linha, para o usuario associar causa e
+//     efeito e aprender a ler sozinho.
+//   - GIRO: operacoes na janela e custo estimado em taxas. Medido em 5 moedas /
+//     83 dias: 44 operacoes por moeda por mes. A 0,05% por lado isso custa mais
+//     que o dobro dos erros de direcao — e nao aparecia em lugar nenhum.
+//   - A SAIDA passou a ser dita. No metodo, saida e entrada sao o MESMO evento
+//     (flip) — e a metade "saiu" nunca aparecia escrita. O painel dizia apenas
+//     "ENTROU SHORT", e as mensagens de alerta tambem. Para uma rodinha isso e
+//     grave: o momento mais importante para o iniciante e a saida. Agora o
+//     campo AGORA diz "SAIU DO LONG → ENTROU SHORT" e os alertas dizem
+//     "SAIA do long e ENTRE short".
+//   - ULTIMA OPERACAO: quanto rendeu a que acabou de fechar, e em quantas
+//     velas. O spread sumia no instante do flip e o usuario nunca via em quanto
+//     terminou o que fez — sem ver o resultado nao ha aprendizado.
+//   - FAIXA DA ZONA no grafico: o espaco entre a branca e a amarela ganha cor
+//     conforme onde o PRECO esta — verde acima das duas, laranja dentro da
+//     faixa, vermelho abaixo. E a mesma informacao do campo Zona do painel,
+//     desenhada no grafico, para o olho aprender a ler sem depender da tabela.
+//     Pintar por zona (e nao pela relacao branca-x-amarela, que e o uso
+//     classico) foi escolha deliberada: a cor no grafico e o texto no painel
+//     precisam dizer a MESMA coisa, senao viram duas licoes concorrentes.
+//
+//   - "acima das duas medias" => "FECHOU acima das duas medias". A frase antiga
+//     nao dizia O QUE estava acima, e a leitura natural e "o corpo do candle".
+//     A comparacao e com o CLOSE — a mesma regua que dispara a entrada. Uma
+//     palavra a mais tira a ambiguidade e repete a regra de ouro do metodo
+//     ("o gatilho e o fechamento") toda vez que o usuario olha o painel.
+//
+//   VARREDURA DO PAINEL (04/08/2026, a pedido do Ricardo)
+//   - BUG DE PRECEDENCIA: "SINAL SE FORMANDO" vinha antes de "PODE VIRAR". Com
+//     o usuario posicionado e o preco cruzando a amarela ao contrario, as duas
+//     condicoes ficam verdadeiras — e vencia a errada. Ele lia "sinal se
+//     formando" (soa como oportunidade de entrada) quando o que estava em jogo
+//     era a SAIDA da operacao aberta dele. Invertida a ordem.
+//   - Fim do jargao: "Giro na janela / 45 ops" virou "Operacoes em 30 dias /
+//     45 operacoes · pagou ~4,5% em taxa". O rotulo calcula o periodo em DIAS
+//     a partir do timeframe do grafico — "360 velas" nao diz nada a quem esta
+//     aprendendo, e muda de sentido conforme o TF.
+//   - "Dist." -> "Distancia". "Spread" -> "Spread (seu ganho)".
+//   - Acentos nos textos do painel (o Pine aceita UTF-8 em string).
+//   - Virgula decimal: "4.5%" num painel em portugues le-se como erro de
+//     digitacao. f_num() troca o ponto pela virgula.
+//   - Hierarquia de fonte padronizada: ROTULO sempre menor que o VALOR. Estava
+//     embaralhado — alguns rotulos maiores que a propria informacao, o que
+//     inverte a ordem de leitura do olho.
+//
+//   - VOLUME DO ROMPIMENTO: o unico filtro que sobreviveu ao teste estatistico
+//     de toda a auditoria. Volume >= 2,5x a media no candle que rompe leva o
+//     acerto de 22% para 43% (p=0,0002), com efeito monotonico. Aparece no
+//     painel, no campo "Por quê", como losango ◆ no grafico e como alerta
+//     proprio. NAO filtra sinal: informa que este e dos bons. O delta de
+//     compra/venda foi medido e FICOU DE FORA — nao sobrevive a correcao para
+//     multiplos testes e e o dado mais caro de obter no Pine. Ver ESTUDO_VOLUME.md.
+// v1.3: as duas lacunas que a aula "R$20.000 em minutos" expos.
+//
+//   (1) ENTRADA CONFIRMADA PELO VOLUME
+//   A aula e explicita: "o volume esta pequeno ainda de compra, EU NAO ENTRO"
+//   e "nao quer dizer que voce tem que entrar em operacoes todo santo dia".
+//   Ate a v1.2 o indicador desenhava TODAS as setas com o mesmo peso.
+//   Medido (8 moedas, 83 dias):
+//     entrando em tudo e invertendo sempre : 740 ops, acerto 24,2%, -154% liq.
+//     so com volume >= 2,5x, sem inverter  :  63 ops, acerto 42,9%, +27% liq.
+//   A esperanca vira POSITIVA (+0,385%/op). Ainda nao e significativa (p=0,21,
+//   n=63) — e promissora, nao comprovada.
+//   Agora a seta CONFIRMADA e grande; a nao confirmada fica discreta. Nenhum
+//   sinal e escondido: o metodo continua inteiro na tela, com hierarquia.
+//
+//   (2) SUPORTE E RESISTENCIA DO GRAFICO DIARIO
+//   Metade da aula e sobre isso, e nenhum dos nossos indicadores usava.
+//   "Nos sempre tracamos o suporte e resistencia no grafico diario […] visao
+//   de drone." E o que responde a pergunta que o trader faz antes de entrar:
+//   ate onde da para ir? "Eu tenho possivelmente um spread menor, porque esta
+//   perto da resistencia."
+//   Os niveis vem de pivos do DIARIO via request.security com lookahead_off —
+//   sem repaint. Niveis proximos sao agrupados numa zona, porque a aula insiste
+//   que "nao e um preco especifico, e uma regiao".
+// ══════════════════════════════════════════════════════════════════════════
+
+
+// ── INPUTS ──────────────────────────────────────────────────────────────
+
+grpSMA = "══ SMAs ══"
+int smaWLen = input.int(8, "SMA Branca (rapida)", minval=2, group=grpSMA)
+int smaYLen = input.int(21, "SMA Amarela (tendencia)", minval=2, group=grpSMA)
+
+grpExib = "══ Exibicao ══"
+bool showBrc = input.bool(true, "Sinais da Branca (alerta antecipado)", group=grpExib)
+bool showFalso = input.bool(false, "Falsos rompimentos (x)", group=grpExib, tooltip="Desligado por padrao na v1.2: medido em 5 moedas, o x aparece MAIS vezes que as proprias setas de entrada (672 contra 618). A logica esta certa — o problema e que polui a tela. Ligue quando quiser treinar o olho para o falso.")
+bool soConfirmadas = input.bool(false, "Destacar so as entradas confirmadas por volume", group=grpExib, tooltip="A aula do Bruno e explicita: 'volume pequeno, eu nao entro'. Com isto ligado, a seta grande so aparece quando o volume confirma; as demais viram marcas pequenas. Nenhum sinal e escondido — muda so o peso visual. Medido: entrar so nas confirmadas leva o acerto de 24% para 43%.")
+bool showZona = input.bool(true, "Pintar a faixa entre as medias (zona)", group=grpExib, tooltip="A faixa entre a branca e a amarela ganha cor conforme onde o PRECO esta: verde acima das duas, vermelho abaixo, laranja quando esta dentro da faixa. E a mesma informacao do campo Zona do painel, para o olho aprender a ler sem depender da tabela.")
+bool showPanel = input.bool(true, "Painel", group=grpExib)
+string panelPos = input.string("Direita Superior", "Posicao do painel", options=["Direita Superior", "Direita Inferior", "Esquerda Superior", "Esquerda Inferior"], group=grpExib)
+string panelSize = input.string("WEB", "Tamanho do painel", options=["WEB", "Celular"], tooltip="WEB = maior e legivel no monitor. Celular = compacto, para nao cobrir o grafico na tela pequena. (Na v1.1 estes dois estavam invertidos.)", group=grpExib)
+
+grpForca = "══ Forca do Rompimento ══"
+int forcaLB = input.int(14, "Lookback corpo medio", minval=5, group=grpForca)
+float forcaMul = input.float(1.5, "Corpo > Nx media = FORTE", minval=1.0, step=0.1, group=grpForca)
+float timiPct = input.float(0.3, "Dist < N% da amarela = TIMIDO", minval=0.05, step=0.05, group=grpForca)
+
+grpVol = "══ Volume do rompimento ══"
+bool showVol = input.bool(true, "Medir o volume do rompimento", group=grpVol, tooltip="Medido em 995 operacoes / 8 moedas / 83 dias: quando o candle que rompe a amarela tem volume >= 2,5x a media, a taxa de acerto vai de 22% para 43% (p=0,0002). Foi o unico filtro que sobreviveu ao teste estatistico em toda a auditoria. NAO filtra sinal nenhum — so avisa que este e dos bons.")
+int volLen = input.int(20, "Media de volume (velas)", minval=5, group=grpVol)
+float volPicoMul = input.float(2.5, "Pico: volume >= Nx a media", minval=1.0, step=0.1, group=grpVol, tooltip="2,5x e onde o efeito aparece com clareza sem ficar raro demais (6,3% dos sinais). Fica entre o 1,5x de confirmacao do VQ Pullback e a regra 5x do Bruno. ATENCAO: este numero foi escolhido olhando o passado — o valor honesto vira do uso real.")
+
+grpSR = "══ Suporte e Resistencia (grafico diario) ══"
+bool showSR = input.bool(true, "Tracar suporte e resistencia do diario", group=grpSR, tooltip="Bruno: 'nos sempre tracamos o suporte e resistencia no grafico diario, visao de drone'. As linhas vem de pivos do grafico DIARIO, sem repaint. Elas dizem ate onde o movimento tem espaco para ir.")
+int srPiv = input.int(3, "Forca do pivo no diario", minval=1, maxval=10, group=grpSR, tooltip="Maior = so os topos e fundos mais importantes. Menor = mais linhas.")
+int srMax = input.int(6, "Quantos niveis manter", minval=2, maxval=12, group=grpSR)
+float srTol = input.float(0.8, "Agrupar niveis a menos de N% (zona)", minval=0.1, step=0.1, group=grpSR, tooltip="Bruno: 'nao e um preco especifico, e uma regiao'. Niveis mais proximos que isso viram um so.")
+
+grpGiro = "══ Disciplina (giro e custo) ══"
+bool showGiro = input.bool(true, "Contar operacoes e custo de taxa", group=grpGiro, tooltip="O metodo inverte a posicao a cada sinal. Medido em 5 moedas / 83 dias: 44 operacoes por moeda por mes. As taxas somam mais que os erros de direcao — e ninguem olha para elas.")
+int giroJanela = input.int(360, "Janela do contador (velas)", minval=20, group=grpGiro, tooltip="360 velas de 2h = 30 dias.")
+float taxaLado = input.float(0.05, "Taxa da corretora por lado (%)", minval=0.0, step=0.01, group=grpGiro, tooltip="Binance Futures taker = 0,05%. Uma operacao completa (entrar + sair) paga isso duas vezes.")
+
+
+// ── SMAs ────────────────────────────────────────────────────────────────
+
+float smaW = ta.sma(close, smaWLen)
+float smaY = ta.sma(close, smaYLen)
+
+plotW = plot(smaW, "SMA Branca", color.white, 2)
+plotY = plot(smaY, "SMA Amarela", color.yellow, 2)
+
+bool ok = not na(smaW) and not na(smaY)
+
+
+// ── ROMPIMENTOS — Deteccao ──────────────────────────────────────────────
+
+// AMARELA — sinal principal de entrada / saida / flip
+// Bruno [01:27]: "Rompeu, fechou acima" = close cruza a SMA com confirmacao
+bool rompAmaUp = ok and close > smaY and close[1] <= smaY[1]
+bool rompAmaDn = ok and close < smaY and close[1] >= smaY[1]
+
+// BRANCA — alerta antecipado (primeiro sinal de mudanca)
+bool rompBrcUp = ok and close > smaW and close[1] <= smaW[1]
+bool rompBrcDn = ok and close < smaW and close[1] >= smaW[1]
+
+// FALSO ROMPIMENTO da amarela
+// Bruno [20:21]: "Rompeu e voltou pra baixo, nao fechou acima da amarela"
+// O falso e medido contra o LADO REAL confirmado do preco (v1.1), nao apenas
+// contra o candle imediatamente anterior.
+var int ladoReal = 0   // 1 = preco fechado acima da amarela, -1 = abaixo
+if ok and close > smaY
+    ladoReal := 1
+if ok and close < smaY
+    ladoReal := -1
+
+bool falsoUp = ok and ladoReal[1] == -1 and high > smaY and close <= smaY
+bool falsoDn = ok and ladoReal[1] == 1 and low < smaY and close >= smaY
+
+
+// ── FORCA DO ROMPIMENTO ─────────────────────────────────────────────────
+// Bruno [23:21]: "Se o rompimento e com forca, mais certo ainda"
+// FORTE = corpo grande (> N× media) E distancia significativa da amarela
+// TIMIDO = corpo pequeno OU close muito perto da amarela
+
+float avgBody = ta.sma(math.abs(close - open), forcaLB)
+float curBody = math.abs(close - open)
+bool corpoForte = not na(avgBody) and curBody > avgBody * forcaMul
+float distYAbs = ok ? math.abs(close - smaY) / smaY * 100 : 0.0
+bool ehTimido = distYAbs < timiPct
+bool ehForte = corpoForte and not ehTimido
+
+
+// ── VOLUME DO ROMPIMENTO ────────────────────────────────────────────────
+// O Bruno fala de volume, de picos e de quem esta comprando ou vendendo. Fomos
+// medir o que disso cabe aqui: 995 operacoes, 8 moedas, 2h, 83 dias.
+//
+// O QUE PASSOU: volume do candle que rompe a amarela.
+//   >= 2,5x a media => acerto 42,9% contra 22,1%   (p = 0,0002)
+//   >= 3,0x a media => acerto 48,6% contra 21,8%   (p = 0,0001)
+// O efeito e monotonico (cresce conforme o limiar sobe) e sobrevive a correcao
+// de Bonferroni para os ~12 testes do estudo. Foi o UNICO filtro significativo
+// de toda a auditoria — a zona critica, a compressao de medias, o intervalo
+// entre flips e o "igualou" falharam todos.
+//
+// O QUE FICOU DE FORA: o delta de compra/venda (agressor). A diferenca existe
+// e vai na direcao certa, mas nao sobrevive a correcao (p=0,026) — e e o dado
+// mais caro de obter, porque o Pine nao entrega compra e venda separadas: so
+// da para aproximar com request.security_lower_tf, com limite de historico.
+// Custo alto, evidencia fraca. Detalhes em ESTUDO_VOLUME.md.
+//
+// RESSALVA: melhora o ACERTO, nao o ganho medio. Acerta o dobro das vezes e
+// ganha menos por acerto. Para quem esta aprendendo isso ainda vale muito — a
+// experiencia de acertar 43% em vez de 22% e psicologicamente outra coisa.
+
+float volMedia = ta.sma(volume, volLen)
+float volRatio = (showVol and not na(volMedia) and volMedia > 0) ? volume / volMedia : na
+bool volPico = not na(volRatio) and volRatio >= volPicoMul
+
+
+// ── SUPORTE E RESISTENCIA DO GRAFICO DIARIO ────────────────────────────
+// Bruno: "nos sempre tracamos o suporte e resistencia no grafico diario […]
+// voce sai do grafico de 2 horas, sobe de 4 horas, sobe diario, e ai voce
+// observa de cima o grafico" — a visao de drone.
+//
+// SEM REPAINT: request.security com lookahead_off. O pivo diario ja nasce
+// atrasado srPiv dias (e o que o torna confiavel), entao nao ha o que
+// antecipar. Um nivel so entra na lista depois de confirmado la em cima.
+//
+// ZONA, NAO PRECO: "nao e um preco especifico […] e uma regiao. E quando voce
+// traca uma linha nessa regiao, voce tem 80% de chance de que alguma coisa va
+// acontecer." Por isso niveis a menos de srTol% um do outro viram um so.
+
+[dPH, dPL] = request.security(syminfo.tickerid, "D", [ta.pivothigh(srPiv, srPiv), ta.pivotlow(srPiv, srPiv)], lookahead=barmerge.lookahead_off)
+
+var array<float> srNiveis = array.new_float()
+
+f_addNivel(float v) =>
+    if not na(v) and v > 0
+        bool existe = false
+        int tam = array.size(srNiveis)
+        if tam > 0
+            for i = 0 to tam - 1
+                float n = array.get(srNiveis, i)
+                if math.abs(n - v) / v * 100 <= srTol
+                    // Ja existe um nivel nessa regiao: refina para a media dos
+                    // dois em vez de criar uma linha quase colada na outra.
+                    array.set(srNiveis, i, (n + v) / 2)
+                    existe := true
+                    break
+        if not existe
+            array.push(srNiveis, v)
+            if array.size(srNiveis) > srMax
+                array.shift(srNiveis)
+
+if showSR
+    if not na(dPH) and (na(dPH[1]) or dPH != dPH[1])
+        f_addNivel(dPH)
+    if not na(dPL) and (na(dPL[1]) or dPL != dPL[1])
+        f_addNivel(dPL)
+
+// O que interessa na hora de entrar: quanto espaco existe ate o proximo
+// obstaculo. "Eu tenho possivelmente um spread menor, porque esta perto da
+// resistencia."
+float srAcima = na
+float srAbaixo = na
+if array.size(srNiveis) > 0
+    for i = 0 to array.size(srNiveis) - 1
+        float n = array.get(srNiveis, i)
+        if n > close and (na(srAcima) or n < srAcima)
+            srAcima := n
+        if n < close and (na(srAbaixo) or n > srAbaixo)
+            srAbaixo := n
+
+float srDistAcima = na(srAcima) ? na : (srAcima - close) / close * 100
+float srDistAbaixo = na(srAbaixo) ? na : (close - srAbaixo) / close * 100
+
+// Desenho: apagar e refazer na ultima barra mantem as linhas sempre coerentes
+// com a lista atual, sem acumular lixo no grafico.
+var array<line> srLines = array.new_line()
+if showSR and barstate.islast
+    for ln in srLines
+        line.delete(ln)
+    array.clear(srLines)
+    if array.size(srNiveis) > 0
+        for i = 0 to array.size(srNiveis) - 1
+            float n = array.get(srNiveis, i)
+            color c = n > close ? color.new(#FF5252, 45) : color.new(#00E676, 45)
+            array.push(srLines, line.new(bar_index - 300, n, bar_index + 10, n, xloc=xloc.bar_index, color=c, width=1, style=line.style_dashed))
+
+
+// ── ESTADO DA POSICAO ───────────────────────────────────────────────────
+// Bruno [22:05]: "Voce nao so sai, voce entra novamente" (flip)
+// pos: 0=FORA, 1=LONG, -1=SHORT
+
+var int pos = 0
+var int sigBar = 0
+var bool sigForte = false
+var int sigDir = 0
+var float sigDist = 0.0     // distancia da amarela NO instante do sinal
+var float precoEnt = na     // preco de entrada, para medir o spread
+var float sigVolRatio = na  // volume do rompimento, em multiplos da media
+
+// A OPERACAO QUE ACABOU DE FECHAR.
+// No metodo do Bruno saida e entrada sao o MESMO evento (flip), e ate aqui a
+// metade "saiu" nunca aparecia escrita — o painel so dizia "ENTROU SHORT".
+// Para uma rodinha isso e grave: o momento mais importante para o iniciante e
+// justamente a saida, e ela estava implicita. Alem disso o spread sumia no
+// instante do flip, entao o usuario nunca via em quanto terminou o que fez.
+// Sem ver o resultado nao ha aprendizado — e como treinar arremesso vendado.
+var float ultResult = na
+var int ultDir = 0
+var int ultVelas = 0
+var int ultBar = 0
+
+bool houveFlip = rompAmaUp or rompAmaDn
+
+// Fecha a operacao ANTES de abrir a nova: depois de mexer em pos e precoEnt o
+// resultado ja nao seria calculavel.
+if houveFlip and pos != 0 and not na(precoEnt) and precoEnt > 0
+    ultResult := pos == 1 ? (close - precoEnt) / precoEnt * 100 : (precoEnt - close) / precoEnt * 100
+    ultDir := pos
+    ultVelas := bar_index - sigBar
+    ultBar := bar_index
+
+if rompAmaUp
+    pos := 1
+    sigBar := bar_index
+    sigForte := ehForte
+    sigDir := 1
+    sigDist := distYAbs
+    sigVolRatio := volRatio
+    precoEnt := close
+
+if rompAmaDn
+    pos := -1
+    sigBar := bar_index
+    sigForte := ehForte
+    sigDir := -1
+    sigDist := distYAbs
+    sigVolRatio := volRatio
+    precoEnt := close
+
+int candlesDesde = bar_index - sigBar
+bool saiuAgora = ultBar == bar_index and ultDir != 0
+
+// v1.2 — SPREAD: o guia sempre disse "voce segura e captura o spread", mas o
+// painel nunca mostrou quanto ja foi capturado. E o feedback que ensina a nao
+// sair cedo demais.
+float spread = (pos != 0 and not na(precoEnt) and precoEnt > 0) ? (pos == 1 ? (close - precoEnt) / precoEnt * 100 : (precoEnt - close) / precoEnt * 100) : na
+
+
+// ── ZONAS (contexto — NAO e ordem) ─────────────────────────────────────
+// ACIMA:  close > branca E close > amarela
+// ENTRE:  close entre as duas SMAs
+// ABAIXO: close < branca E close < amarela
+//
+// AUDITORIA (achado 1): ate a v1.1 esta zona exibia "CRITICA — nao entre"
+// enquanto o gatilho disparava a seta verde grande de ENTRADA. Aconteceu em
+// 87 de 618 sinais medidos (14,1%) — nao e caso de borda, e a correcao que
+// retoma dentro de uma tendencia.
+//
+// Os dados NAO justificaram filtrar esses sinais: media -0,183% contra -0,019%
+// dos demais, com intervalo de confianca tres vezes maior que a diferenca.
+// Alem disso 95% deles JA sao rotulados TIMIDO pelo campo Forca — o aviso util
+// ja existe na tela, num campo que nao briga com a seta.
+//
+// Entao a zona voltou a ser o que deveria ter sido sempre: uma DESCRICAO.
+
+bool zAcima = ok and close > smaW and close > smaY
+bool zAbaixo = ok and close < smaW and close < smaY
+// "entre as medias" e o caso restante — nao precisa de variavel propria. A v1.1
+// removeu uma `zCritica` que existia sem ser usada; nao vale reintroduzi-la.
+
+float distW = ok ? (close - smaW) / smaW * 100 : 0.0
+float distY = ok ? (close - smaY) / smaY * 100 : 0.0
+
+// A FAIXA ENTRE AS MEDIAS, pintada pela ZONA DO PRECO.
+//
+// A escolha de pintar por ZONA (e nao pela relacao branca-x-amarela, que e o
+// uso classico de uma fita dessas) e proposital: assim a cor no grafico e
+// EXATAMENTE a mesma informacao do campo Zona do painel. O usuario associa as
+// duas, e um dia le a cor sem precisar da tabela — que e o objetivo de tirar
+// as rodinhas.
+//
+// A leitura fica literal: a faixa E o "entre as medias". Preco acima dela =
+// verde; dentro dela = laranja (indeciso); abaixo = vermelho.
+//
+// Transparencia alta de proposito: a faixa e pano de fundo, nao pode competir
+// com as velas nem com as setas de entrada.
+color corZona = not ok ? na : zAcima ? color.new(#00E676, 88) : zAbaixo ? color.new(#FF1744, 88) : color.new(#FFA726, 90)
+fill(plotW, plotY, color = showZona ? corZona : na, title = "Zona (faixa entre as medias)")
+
+
+// ── v1.2 — A VELA JA FECHOU? ────────────────────────────────────────────
+// A regra de ouro do Bruno e o FECHAMENTO, nunca o toque. A v1.1 so marcava o
+// falso rompimento DEPOIS que ele acontecia — a rodinha chegava atrasada.
+// Aqui o aviso aparece ENQUANTO a tentacao esta acontecendo.
+
+bool velaFechada = barstate.isconfirmed
+// math.round devolve float — manter float evita erro de tipo na atribuicao.
+float minRestante = math.max(0.0, math.round((time_close - timenow) / 60000.0))
+
+// O preco cruzou a linha mas a vela ainda pode voltar antes de fechar.
+bool podeVirar = ok and pos != 0 and not velaFechada and ((pos == 1 and close < smaY) or (pos == -1 and close > smaY))
+// Sem posicao ainda, mas o preco esta do outro lado — sinal se formando.
+bool sinalFormando = ok and not velaFechada and ((ladoReal[1] == -1 and close > smaY) or (ladoReal[1] == 1 and close < smaY))
+
+
+// ── v1.2 — GIRO E CUSTO DE TAXA ─────────────────────────────────────────
+// O metodo inverte a posicao a cada sinal. Medido em 5 moedas / 83 dias: 44
+// operacoes por moeda por mes. A 0,05% por lado, o custo acumulado supera os
+// erros de direcao — e nao aparecia em lugar nenhum da tela.
+// Isto NAO e proibicao: e o numero que transforma "levei um flip" em "levei
+// 44 flips e paguei por todos".
+
+float opsJanela = math.sum((rompAmaUp or rompAmaDn) ? 1.0 : 0.0, giroJanela)
+// O rotulo diz o periodo em DIAS, nao em velas: "360 velas" nao significa nada
+// para quem esta aprendendo, e o numero muda de sentido conforme o timeframe.
+float diasJanela = giroJanela * (timeframe.in_seconds() / 60.0) / 1440.0
+float custoGiro = opsJanela * taxaLado * 2.0
+
+
+// ── SINAIS NO GRAFICO ───────────────────────────────────────────────────
+
+// AMARELA — setas GRANDES (sinal principal — como Bruno marca no video)
+//
+// v1.3: com "destacar so as confirmadas" ligado, a seta grande fica reservada
+// para o rompimento com volume. O sinal sem volume NAO some — vira uma marca
+// pequena. Esconder metade do metodo tiraria do aluno a chance de ver por que
+// aquelas entradas sao piores; o que muda e o peso visual, nao a informacao.
+bool entConfUp = rompAmaUp and (not soConfirmadas or volPico)
+bool entConfDn = rompAmaDn and (not soConfirmadas or volPico)
+bool entFracaUp = rompAmaUp and soConfirmadas and not volPico
+bool entFracaDn = rompAmaDn and soConfirmadas and not volPico
+
+plotshape(entConfUp, "LONG  ▲", shape.triangleup, location.belowbar, color.new(#00E676, 0), size=size.large)
+plotshape(entConfDn, "SHORT ▼", shape.triangledown, location.abovebar, color.new(#FF1744, 0), size=size.large)
+plotshape(entFracaUp, "LONG sem volume", shape.triangleup, location.belowbar, color.new(#00E676, 55), size=size.tiny)
+plotshape(entFracaDn, "SHORT sem volume", shape.triangledown, location.abovebar, color.new(#FF1744, 55), size=size.tiny)
+
+// BRANCA — setas pequenas (alerta antecipado, nao sobrepoe amarela)
+bool brcUpSolo = showBrc and rompBrcUp and not rompAmaUp
+bool brcDnSolo = showBrc and rompBrcDn and not rompAmaDn
+plotshape(brcUpSolo, "Branca ↑", shape.triangleup, location.belowbar, color.new(#B2FF59, 50), size=size.small)
+plotshape(brcDnSolo, "Branca ↓", shape.triangledown, location.abovebar, color.new(#FF8A80, 50), size=size.small)
+
+// PICO DE VOLUME no rompimento — o losango ja significa "volume" no
+// VQ_Pullback; manter o mesmo simbolo faz o olho reconhecer entre indicadores.
+plotshape(showVol and volPico and rompAmaUp, "Pico de volume LONG", shape.diamond, location.belowbar, color.new(#FFA726, 0), size=size.tiny)
+plotshape(showVol and volPico and rompAmaDn, "Pico de volume SHORT", shape.diamond, location.abovebar, color.new(#FFA726, 0), size=size.tiny)
+
+// FALSO ROMPIMENTO — x cinza (desligado por padrao na v1.2)
+plotshape(showFalso and falsoUp, "Falso ↑", shape.xcross, location.abovebar, color.new(color.gray, 30), size=size.tiny)
+plotshape(showFalso and falsoDn, "Falso ↓", shape.xcross, location.belowbar, color.new(color.gray, 30), size=size.tiny)
+
+
+// ── ALERTAS ─────────────────────────────────────────────────────────────
+
+// As mensagens dizem as DUAS metades: no metodo do Bruno o mesmo evento fecha
+// a operacao anterior e abre a nova. Ate a v1.1 o alerta so falava da entrada,
+// e quem estava posicionado nao era avisado de que aquilo era a sua SAIDA.
+alertcondition(rompAmaUp, "Rompeu Amarela ↑", "ES B&A: fechou ACIMA da amarela — SAIA do short e ENTRE long")
+alertcondition(rompAmaDn, "Rompeu Amarela ↓", "ES B&A: fechou ABAIXO da amarela — SAIA do long e ENTRE short")
+alertcondition(volPico and (rompAmaUp or rompAmaDn), "Rompimento com PICO de volume", "ES B&A: rompimento com PICO de volume — historicamente o dobro de acerto")
+alertcondition(rompBrcUp, "Rompeu Branca ↑", "ES B&A: Alerta — rompeu branca ↑")
+alertcondition(rompBrcDn, "Rompeu Branca ↓", "ES B&A: Alerta — rompeu branca ↓")
+alertcondition(falsoUp or falsoDn, "Falso Rompimento", "ES B&A: Falso rompimento da amarela")
+
+
+// Numero em portugues usa VIRGULA decimal. str.tostring devolve ponto, e
+// "4.5%" num painel em portugues le-se como erro de digitacao.
+f_num(float v, string fmt) => str.replace_all(str.tostring(v, fmt), ".", ",")
+
+
+// ── PAINEL ──────────────────────────────────────────────────────────────
+
+tPos = panelPos == "Direita Superior" ? position.top_right : panelPos == "Direita Inferior" ? position.bottom_right : panelPos == "Esquerda Superior" ? position.top_left : position.bottom_left
+
+// CORRECAO v1.2 — os dois tamanhos estavam INVERTIDOS na v1.1: escolher "WEB"
+// entregava size.small e "Celular" entregava size.normal. Agora segue a mesma
+// logica ja corrigida no VQ_Pullback_v1_9: no monitor sobra espaco, entao o
+// texto pode ser maior e mais legivel; no celular a tela e pequena e o painel
+// precisa ocupar menos para nao cobrir o grafico.
+bool ehCel = panelSize == "Celular"
+string szTit = ehCel ? size.small  : size.normal
+string szTxt = ehCel ? size.small  : size.normal
+string szSub = ehCel ? size.tiny   : size.small
+
+// Hierarquia por blocos, do mais acionavel para o mais contextual:
+//   1. o que fazer  2. a sua operacao  3. por que  4. disciplina
+// No celular o painel para no bloco 2 (8 linhas contra 13): tela pequena com
+// painel grande cobre o grafico, e ai o usuario desliga o painel inteiro.
+int nLinhas = ehCel ? 9 : 16
+
+var table pan = table.new(tPos, 2, nLinhas, bgcolor=color.new(#0B0E11, 0), border_width=1, border_color=color.new(#2A2E39, 0), frame_width=1, frame_color=color.new(#434651, 0))
+
+if showPanel and barstate.islast
+
+    color cV = #00E676
+    color cR = #FF1744
+    color cG = #90A4AE
+    color cL = #FFA726
+    color cB = color.white
+    color cF = color.new(#1B1F2A, 0)
+    color cH = color.new(#1565C0, 0)
+
+    // ══ BLOCO 1 — O QUE FAZER AGORA ══
+    // Um leigo nao precisa de diagnostico de mercado; precisa saber o que fazer
+    // com o dinheiro dele. Por isso esta linha vem antes de qualquer outra.
+
+    table.cell(pan, 0, 0, "ES B&A v1.3  ·  entrada e saída", text_color=cB, text_size=szTit, bgcolor=cH, text_halign=text.align_center)
+    table.merge_cells(pan, 0, 0, 1, 0)
+
+    // Textos mais curtos no celular: uma frase que quebra em duas linhas deixa
+    // de ser lida de relance, que e o unico jeito que ela sera lida no meio de
+    // uma operacao.
+    string agora = "—"
+    color agoraCor = cG
+    if pos == 0
+        agora := "AGUARDE O 1º SINAL"
+        agoraCor := cG
+    else if podeVirar
+        // ANTES de "sinal se formando": quem esta posicionado precisa saber que
+        // a operacao DELE pode fechar, nao que ha uma entrada nascendo. As duas
+        // condicoes ficam verdadeiras ao mesmo tempo, e ate aqui vencia a
+        // errada — a mensagem soava como oportunidade quando era risco.
+        agora := ehCel ? "PODE VIRAR — espere fechar" : "PODE VIRAR — espere a vela fechar"
+        agoraCor := cL
+    else if sinalFormando
+        agora := ehCel ? "FORMANDO — espere fechar" : "SINAL SE FORMANDO — espere a vela fechar"
+        agoraCor := cL
+    else if saiuAgora
+        // As DUAS metades do flip. Ate aqui o painel so dizia "ENTROU SHORT" e
+        // a saida — o momento mais importante para o iniciante — ficava muda.
+        string de = ultDir == 1 ? "LONG" : "SHORT"
+        string pa = pos == 1 ? "LONG" : "SHORT"
+        agora := ehCel ? ("SAIU " + de + " → ENTROU " + pa) : ("SAIU DO " + de + "  →  ENTROU " + pa)
+        agoraCor := cL
+    else if candlesDesde == 0
+        agora := pos == 1 ? "ENTROU LONG agora" : "ENTROU SHORT agora"
+        agoraCor := pos == 1 ? cV : cR
+    else
+        agora := pos == 1 ? "SEGURE O LONG" : "SEGURE O SHORT"
+        agoraCor := pos == 1 ? cV : cR
+
+    table.cell(pan, 0, 1, agora, text_color=agoraCor, text_size=szTit, bgcolor=color.new(#161A25, 0), text_halign=text.align_center)
+    table.merge_cells(pan, 0, 1, 1, 1)
+
+    // A regra de ouro do metodo e o FECHAMENTO. Este campo existe para o
+    // usuario ver isso enquanto a vela ainda esta viva.
+    string vTxt = velaFechada ? "FECHADA ✓" : "ABERTA — faltam " + str.tostring(minRestante, "#") + " min"
+    color vCor = velaFechada ? cV : cL
+    table.cell(pan, 0, 2, "Vela", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 2, vTxt, text_color=vCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+
+    // O numero que se leva para a corretora. Distancia em % nao serve para
+    // colocar ordem; preco serve.
+    string saiTxt = (pos == 0 or not ok) ? "—" : str.tostring(smaY, format.mintick)
+    string saiLbl = ehCel ? (pos == 1 ? "Sai se fechar <" : pos == -1 ? "Sai se fechar >" : "Sai se fechar") : (pos == 1 ? "Sai se fechar ABAIXO de" : pos == -1 ? "Sai se fechar ACIMA de" : "Sai se fechar")
+    table.cell(pan, 0, 3, saiLbl, text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 3, saiTxt, text_color=cL, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+
+    // ══ BLOCO 2 — A SUA OPERACAO ══
+
+    string eTxt = pos == 1 ? "LONG ▲" : pos == -1 ? "SHORT ▼" : "FORA ○"
+    string eSuf = (pos != 0 and sigBar > 0) ? "  ·  " + str.tostring(candlesDesde) + " velas" : ""
+    color eCor = pos == 1 ? cV : pos == -1 ? cR : cG
+    table.cell(pan, 0, 4, "Estado", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 4, eTxt + eSuf, text_color=eCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+
+    string spTxt = na(spread) ? "—" : (spread >= 0 ? "+" : "") + f_num(spread, "#.##") + "%"
+    color spCor = na(spread) ? cG : spread > 0 ? cV : spread < 0 ? cR : cG
+    table.cell(pan, 0, 5, "Spread (seu ganho)", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 5, spTxt, text_color=spCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+
+    // VOLUME — o filtro que leva o acerto de 24% para 43%.
+    string voTxt = "—"
+    color voCor = cG
+    if showVol and sigBar > 0 and not na(sigVolRatio)
+        voTxt := f_num(sigVolRatio, "#.#") + "x a média" + (sigVolRatio >= volPicoMul ? "  ◆ CONFIRMADA" : "  (sem confirmação)")
+        voCor := sigVolRatio >= volPicoMul ? cV : cL
+    table.cell(pan, 0, 6, "Volume da entrada", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 6, voTxt, text_color=voCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+
+    // ESPACO ATE O PROXIMO OBSTACULO — a pergunta que a aula manda fazer antes
+    // de entrar: "eu tenho possivelmente um spread menor, porque esta perto da
+    // resistencia". Fica no bloco 2 (aparece tambem no celular) porque e
+    // decisao de entrada, nao contexto.
+    string esTxt = not showSR ? "—" : (na(srDistAcima) ? "—" : "↑ " + f_num(srDistAcima, "#.#") + "%") + "   /   " + (na(srDistAbaixo) ? "—" : "↓ " + f_num(srDistAbaixo, "#.#") + "%")
+    color esCor = cG
+    if showSR and pos != 0
+        float espaco = pos == 1 ? srDistAcima : srDistAbaixo
+        esCor := na(espaco) ? cG : espaco < 1.0 ? cR : espaco < 2.5 ? cL : cV
+    table.cell(pan, 0, 7, "Espaço até resist. / suporte", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 7, esTxt, text_color=esCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+
+    string ulTxt = "—"
+    color ulCor = cG
+    if ultDir != 0 and not na(ultResult)
+        ulTxt := (ultDir == 1 ? "LONG " : "SHORT ") + (ultResult >= 0 ? "+" : "") + f_num(ultResult, "#.##") + "%  ·  " + str.tostring(ultVelas) + " velas"
+        ulCor := ultResult > 0 ? cV : ultResult < 0 ? cR : cG
+    table.cell(pan, 0, 8, "Última operação", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 8, ulTxt, text_color=ulCor, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
+
+    // ══ BLOCO 3 — POR QUE (so no monitor) ══
+    if not ehCel
+
+        string fTxt = sigBar == 0 ? "—" : sigForte ? "FORTE ◆" : "TÍMIDO ◇"
+        color fCor = sigBar == 0 ? cG : sigForte ? cV : cG
+        table.cell(pan, 0, 9, "Força da entrada", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+        table.cell(pan, 1, 9, fTxt, text_color=fCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+
+        string rTxt = (not showSR or na(srAcima)) ? "—" : str.tostring(srAcima, format.mintick)
+        table.cell(pan, 0, 10, "Resistência acima", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+        table.cell(pan, 1, 10, rTxt, text_color=#FF5252, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
+
+        string sTxt = (not showSR or na(srAbaixo)) ? "—" : str.tostring(srAbaixo, format.mintick)
+        table.cell(pan, 0, 11, "Suporte abaixo", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+        table.cell(pan, 1, 11, sTxt, text_color=cV, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
+
+        string pqTxt = "—"
+        if sigBar > 0
+            pqTxt := "fechou " + f_num(sigDist, "#.##") + "%" + (sigDir == 1 ? " ACIMA" : " ABAIXO") + " da amarela, " + (sigForte ? "corpo forte" : "corpo fraco") + (na(sigVolRatio) ? "" : ", volume " + f_num(sigVolRatio, "#.#") + "x")
+        table.cell(pan, 0, 12, "Por quê", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+        table.cell(pan, 1, 12, pqTxt, text_color=cG, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
+
+        string zTxt = not ok ? "—" : zAcima ? "fechou acima das duas médias" : zAbaixo ? "fechou abaixo das duas médias" : "fechou entre as médias — não consolidado"
+        color zCor = not ok ? cG : zAcima ? cV : zAbaixo ? cR : cL
+        table.cell(pan, 0, 13, "Zona", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+        table.cell(pan, 1, 13, zTxt, text_color=zCor, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
+
+        string dTxt = (distW >= 0 ? "+" : "") + f_num(distW, "#.##") + "%   /   " + (distY >= 0 ? "+" : "") + f_num(distY, "#.##") + "%"
+        table.cell(pan, 0, 14, "Distância da branca / amarela", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+        table.cell(pan, 1, 14, dTxt, text_color=cG, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
+
+        // ══ BLOCO 4 — DISCIPLINA ══
+        string gTxt = not showGiro ? "—" : str.tostring(opsJanela, "#") + " operações  ·  pagou ~" + f_num(custoGiro, "#.##") + "% em taxa"
+        color gCor = not showGiro ? cG : custoGiro >= 3.0 ? cR : custoGiro >= 1.5 ? cL : cG
+        string gLbl = "Operações em " + str.tostring(diasJanela, "#") + " dias"
+        table.cell(pan, 0, 15, gLbl, text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+        table.cell(pan, 1, 15, gTxt, text_color=gCor, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
+
+// ══════════════════════════════════════════════════════════════════════════
+// FIM — ES Rompimentos SMAs B&A v1.3
+// ══════════════════════════════════════════════════════════════════════════
