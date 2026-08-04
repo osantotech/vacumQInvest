@@ -71,6 +71,14 @@ indicator("ES Rompimentos SMAs B&A v1.2", "ES_B&A v1.2", overlay=true, max_label
 //   - ULTIMA OPERACAO: quanto rendeu a que acabou de fechar, e em quantas
 //     velas. O spread sumia no instante do flip e o usuario nunca via em quanto
 //     terminou o que fez — sem ver o resultado nao ha aprendizado.
+//   - FAIXA DA ZONA no grafico: o espaco entre a branca e a amarela ganha cor
+//     conforme onde o PRECO esta — verde acima das duas, laranja dentro da
+//     faixa, vermelho abaixo. E a mesma informacao do campo Zona do painel,
+//     desenhada no grafico, para o olho aprender a ler sem depender da tabela.
+//     Pintar por zona (e nao pela relacao branca-x-amarela, que e o uso
+//     classico) foi escolha deliberada: a cor no grafico e o texto no painel
+//     precisam dizer a MESMA coisa, senao viram duas licoes concorrentes.
+//
 //   VARREDURA DO PAINEL (04/08/2026, a pedido do Ricardo)
 //   - BUG DE PRECEDENCIA: "SINAL SE FORMANDO" vinha antes de "PODE VIRAR". Com
 //     o usuario posicionado e o preco cruzando a amarela ao contrario, as duas
@@ -108,6 +116,7 @@ int smaYLen = input.int(21, "SMA Amarela (tendencia)", minval=2, group=grpSMA)
 grpExib = "══ Exibicao ══"
 bool showBrc = input.bool(true, "Sinais da Branca (alerta antecipado)", group=grpExib)
 bool showFalso = input.bool(false, "Falsos rompimentos (x)", group=grpExib, tooltip="Desligado por padrao na v1.2: medido em 5 moedas, o x aparece MAIS vezes que as proprias setas de entrada (672 contra 618). A logica esta certa — o problema e que polui a tela. Ligue quando quiser treinar o olho para o falso.")
+bool showZona = input.bool(true, "Pintar a faixa entre as medias (zona)", group=grpExib, tooltip="A faixa entre a branca e a amarela ganha cor conforme onde o PRECO esta: verde acima das duas, vermelho abaixo, laranja quando esta dentro da faixa. E a mesma informacao do campo Zona do painel, para o olho aprender a ler sem depender da tabela.")
 bool showPanel = input.bool(true, "Painel", group=grpExib)
 string panelPos = input.string("Direita Superior", "Posicao do painel", options=["Direita Superior", "Direita Inferior", "Esquerda Superior", "Esquerda Inferior"], group=grpExib)
 string panelSize = input.string("WEB", "Tamanho do painel", options=["WEB", "Celular"], tooltip="WEB = maior e legivel no monitor. Celular = compacto, para nao cobrir o grafico na tela pequena. (Na v1.1 estes dois estavam invertidos.)", group=grpExib)
@@ -133,8 +142,8 @@ float taxaLado = input.float(0.05, "Taxa da corretora por lado (%)", minval=0.0,
 float smaW = ta.sma(close, smaWLen)
 float smaY = ta.sma(close, smaYLen)
 
-plot(smaW, "SMA Branca", color.white, 2)
-plot(smaY, "SMA Amarela", color.yellow, 2)
+plotW = plot(smaW, "SMA Branca", color.white, 2)
+plotY = plot(smaY, "SMA Amarela", color.yellow, 2)
 
 bool ok = not na(smaW) and not na(smaY)
 
@@ -289,6 +298,22 @@ bool zAbaixo = ok and close < smaW and close < smaY
 
 float distW = ok ? (close - smaW) / smaW * 100 : 0.0
 float distY = ok ? (close - smaY) / smaY * 100 : 0.0
+
+// A FAIXA ENTRE AS MEDIAS, pintada pela ZONA DO PRECO.
+//
+// A escolha de pintar por ZONA (e nao pela relacao branca-x-amarela, que e o
+// uso classico de uma fita dessas) e proposital: assim a cor no grafico e
+// EXATAMENTE a mesma informacao do campo Zona do painel. O usuario associa as
+// duas, e um dia le a cor sem precisar da tabela — que e o objetivo de tirar
+// as rodinhas.
+//
+// A leitura fica literal: a faixa E o "entre as medias". Preco acima dela =
+// verde; dentro dela = laranja (indeciso); abaixo = vermelho.
+//
+// Transparencia alta de proposito: a faixa e pano de fundo, nao pode competir
+// com as velas nem com as setas de entrada.
+color corZona = not ok ? na : zAcima ? color.new(#00E676, 88) : zAbaixo ? color.new(#FF1744, 88) : color.new(#FFA726, 90)
+fill(plotW, plotY, color = showZona ? corZona : na, title = "Zona (faixa entre as medias)")
 
 
 // ── v1.2 — A VELA JA FECHOU? ────────────────────────────────────────────

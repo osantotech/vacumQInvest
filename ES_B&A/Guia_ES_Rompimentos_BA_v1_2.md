@@ -128,6 +128,26 @@ no sobe-e-desce.
 A branca é mais rápida porque usa menos velas. Ela vira antes — por isso serve
 de aviso prévio. Mas **entrar pela branca é apressar**: ela erra muito mais.
 
+### A faixa colorida entre as duas linhas
+
+O espaço entre a branca e a amarela é pintado com uma cor bem clarinha. **Essa
+cor é a mesma informação do campo "Zona" do painel** — só que desenhada no
+gráfico, para o seu olho aprender a ler sem depender da tabela.
+
+| Cor da faixa | O que significa |
+|---|---|
+| **verde claro** | o preço está **acima** das duas linhas — tendência de alta |
+| **laranja claro** | o preço está **dentro** da faixa — as duas linhas discordam |
+| **vermelho claro** | o preço está **abaixo** das duas — tendência de baixa |
+
+A transparência é alta de propósito: a faixa é pano de fundo. Ela não pode
+competir com as velas nem com as setas de entrada.
+
+**Como usar isso para treinar:** antes de olhar o painel, olhe a cor da faixa e
+diga em voz alta o que ela significa. Depois confira no campo Zona. Quando você
+acertar dez vezes seguidas sem pensar, essa rodinha já pode sair — e você pode
+desligá-la nos ajustes.
+
 ---
 
 ## 4. O PAINEL — campo por campo
@@ -443,6 +463,8 @@ Você quase não precisa mexer. Os que importam:
   Celular = compacto, mostra só os dois primeiros blocos.
   *(Na v1.1 esses dois estavam invertidos. Corrigido.)*
 - **Falsos rompimentos (✕)**: desligado. Ligue para treinar o olho.
+- **Pintar a faixa entre as médias (zona)**: ligado. Desligue quando já
+  reconhecer a zona sem precisar da cor.
 - **Posição do painel**: os quatro cantos da tela.
 
 **Volume do rompimento**
