@@ -63,7 +63,7 @@ detalhou.
 
 5 moedas, 80 dias de mercado real:
 
-| Gráfico | Operações/mês | Acerto | **Acerto com ◆ PICO** | **Taxa paga/mês** |
+| Gráfico | Operações/mês | Acerto | **Acerto com ◆ CONFIRMADA** | **Taxa paga/mês** |
 |---|---|---|---|---|
 | 15 min | 366 | 21,2% | 23,8% | **36,6%** |
 | 30 min | 177 | 22,3% | 28,2% | **17,7%** |
@@ -88,7 +88,7 @@ item 5) só funciona no meio da tabela:
 4h    31,3%   amostra pequena demais
 ```
 
-**Em 2 horas, o losango quase dobra o acerto: de 23% para 46%.**
+**Em 2 horas, o losango ◆ quase dobra o acerto: de 23% para 46%.**
 
 Por quê? Em 15 minutos, um volume grande costuma ser uma notícia, um robô ou
 uma liquidação — barulho. Em 2 horas, o mesmo volume grande significa **gente
@@ -263,19 +263,19 @@ demais nunca chega lá.
 
 #### Volume da entrada
 
-> `3x a média ◆ PICO`
+> `3,0x a média ◆ CONFIRMADA`
 
 **O campo com a melhor informação do indicador.** Volume é o tanto de dinheiro
 que passou naquela vela.
 
-Este campo mostra quantas vezes o volume da vela que gerou o sinal foi maior
-que a média das últimas 20.
+Ele mostra quantas vezes o volume da vela que gerou o sinal foi maior que a
+média das últimas 20.
 
 | O que aparece | O que significa |
 |---|---|
-| **`3x a média ◆ PICO`** (verde) | **entrou muita gente.** É um sinal dos bons |
-| `1.4x a média` (cinza) | volume normal, sinal comum |
-| `0.6x a média` (laranja) | volume fraco, pouca gente se importou |
+| **`3,0x a média ◆ CONFIRMADA`** (verde) | **entrou muita gente.** É uma das boas |
+| `1,4x a média (sem confirmação)` (laranja) | volume normal — sinal dos fracos |
+| `0,6x a média (sem confirmação)` (laranja) | quase ninguém se importou |
 
 **Por que isso importa tanto:** medimos 995 operações. Quando o volume é
 **2,5× ou mais**, o acerto vai de **22% para 43%**. Praticamente dobra.
@@ -426,6 +426,30 @@ Cores: cinza (até 1,5%) · laranja (1,5% a 3%) · **vermelho (acima de 3%)**
 "venda" — é "**feche a compra** e abra a venda". Se você não tinha nada aberto,
 vale só a segunda metade.
 
+### Três marcas parecidas, três significados
+
+Com o filtro de volume ligado, passam a existir três marcas pequenas na tela.
+**Olhe a FORMA, não o tamanho:**
+
+| Forma | O que é | Vale entrar? |
+|---|---|---|
+| **▲ triângulo GRANDE** | rompeu a amarela **com volume** | é a entrada boa |
+| **● círculo** | rompeu a amarela **sem volume** | é sinal, mas dos fracos |
+| **△ triângulo pequeno** | só a **branca** cruzou | não. Nem é rompimento |
+
+Na v1.2 as duas marcas pequenas eram triângulos e ficavam quase idênticas —
+significados bem diferentes, aparência igual. Na v1.3 o rompimento fraco virou
+círculo justamente para o olho separar sem precisar medir.
+
+**Por que os fracos continuam na tela.** Seria fácil escondê-los, e a tela
+ficaria mais limpa. Eles ficam de propósito: **é vendo eles falharem que você
+aprende por que o filtro vale a pena.** Uma regra que você só obedece porque
+alguém mandou não sobrevive ao dia em que você perder três seguidas.
+
+> **Exercício:** toda vez que aparecer um círculo, olhe as velas seguintes. Em
+> duas semanas você terá visto uma dúzia de casos — e aí o filtro deixa de ser
+> um número que leu neste guia e passa a ser um padrão que você reconhece.
+
 ### As linhas tracejadas (suporte e resistência)
 
 Elas não vêm do gráfico de 2 horas — vêm do **gráfico diário**. É o que o Bruno
@@ -464,14 +488,32 @@ contra 618 setas de entrada** — mais que os próprios sinais, e polui o gráfi
 
 ---
 
+### O que o gráfico mostra quando você liga o filtro
+
+Repare **onde** os círculos aparecem. Eles vêm em grupos, nas regiões em que o
+preço anda de lado — várias tentativas de rompimento seguidas, nenhuma com
+volume, nenhuma indo a lugar nenhum.
+
+E as setas grandes aparecem sozinhas, geralmente no fim de um movimento de
+queda ou no começo de uma alta — e são as que andam.
+
+**É a lição inteira do método, desenhada na tela.** Mercado de lado produz
+muitos sinais fracos; movimento de verdade produz poucos e fortes. Você não
+precisa acreditar na estatística: dá para ver.
+
+---
+
 ## 6. O PASSO A PASSO DO DIA
 
 1. **Abra o ativo no gráfico de 2 HORAS.** Confira no topo da tela.
 2. **Olhe a linha grande colorida do painel.** Ela já te diz o que fazer.
 3. **Se disser "SEGURE"** — não faça nada. Feche o computador. Sério.
-4. **Se aparecer uma seta grande**, confira três coisas nesta ordem:
-   - **A vela já fechou?** Se o painel diz "ABERTA", **espere.**
-   - **Tem losango ◆?** Se sim, o sinal é dos bons.
+4. **Se aparecer uma seta grande**, confira quatro coisas nesta ordem:
+   - **A vela já fechou?** Se o painel diz "ABERTA" ou "FECHANDO AGORA",
+     **espere.** Só o fechamento vale.
+   - **O Volume da entrada diz CONFIRMADA?** Se não, é um dos fracos.
+   - **O campo Espaço está verde?** Se estiver vermelho, o obstáculo está logo
+     ali e o ganho possível é pequeno.
    - **O campo Por quê** — leia. É seu treino.
 5. **Antes de entrar, anote o "Sai se fechar".** É a sua saída, definida antes
    de você arriscar dinheiro. **Nunca entre sem saber onde vai sair.**
@@ -490,13 +532,13 @@ contra 618 setas de entrada** — mais que os próprios sinais, e polui o gráfi
 
 ## 7. OS ALERTAS (para não ficar preso à tela)
 
-No TradingView, clique no sino → Adicionar alerta → condição = **ES B&A v1.2**.
+No TradingView, clique no sino → Adicionar alerta → condição = **ES B&A v1.3**.
 
 | Alerta | Quando dispara | Vale armar? |
 |---|---|---|
 | Rompeu Amarela ↑ | fechou acima — sai do short, entra long | **sim** |
 | Rompeu Amarela ↓ | fechou abaixo — sai do long, entra short | **sim** |
-| **Rompimento com PICO de volume** | rompeu com volume alto | **sim, o melhor** |
+| **Rompimento com PICO de volume** | rompeu com volume confirmado | **sim, o melhor** |
 | Rompeu Branca ↑ / ↓ | aviso antecipado | opcional |
 | Falso Rompimento | tocou e voltou | não |
 
@@ -601,4 +643,4 @@ E a decisão de entrar e sair de qualquer operação é, sempre, inteiramente su
 ---
 
 *Guia v1.3 · indicador `ES_RompimentosSMAs_BA_v1_3.pine` · método MAC 3.0 (Bruno Aguiar)*
-*Números medidos em 04/08/2026 · metodologia completa em `AUDITORIA_ES_BA_v1_1.md` e `ESTUDO_VOLUME.md`*
+*Números medidos em 04/08/2026 · metodologia completa em `AUDITORIA_ES_BA_v1_1.md`, `ESTUDO_VOLUME.md` e `AUDITORIA_AULA_SUPORTE_RESISTENCIA.md`*
