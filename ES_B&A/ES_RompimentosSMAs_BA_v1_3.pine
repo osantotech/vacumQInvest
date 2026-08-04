@@ -317,7 +317,7 @@ if showSR and barstate.islast
         for i = 0 to array.size(srNiveis) - 1
             float n = array.get(srNiveis, i)
             color c = n > close ? color.new(#FF5252, 45) : color.new(#00E676, 45)
-            array.push(srLines, line.new(bar_index - 300, n, bar_index + 10, n, xloc=xloc.bar_index, color=c, width=1, style=line.style_dashed))
+            array.push(srLines, line.new(bar_index - 1, n, bar_index, n, xloc=xloc.bar_index, color=c, width=1, style=line.style_dashed, extend=extend.both))
 
 
 // ── ESTADO DA POSICAO ───────────────────────────────────────────────────
@@ -467,8 +467,15 @@ bool entFracaDn = rompAmaDn and soConfirmadas and not volPico
 
 plotshape(entConfUp, "LONG  ▲", shape.triangleup, location.belowbar, color.new(#00E676, 0), size=size.large)
 plotshape(entConfDn, "SHORT ▼", shape.triangledown, location.abovebar, color.new(#FF1744, 0), size=size.large)
-plotshape(entFracaUp, "LONG sem volume", shape.triangleup, location.belowbar, color.new(#00E676, 55), size=size.tiny)
-plotshape(entFracaDn, "SHORT sem volume", shape.triangledown, location.abovebar, color.new(#FF1744, 55), size=size.tiny)
+// CIRCULO, nao triangulo: com o filtro ligado, o triangulo pequeno da amarela
+// sem volume ficava quase identico ao triangulo pequeno da branca — duas marcas
+// com significados bem diferentes e aparencia igual. Tamanho e transparencia
+// nao separaram; FORMA separa.
+//   triangulo GRANDE  = rompimento confirmado por volume (a entrada)
+//   circulo           = rompeu a amarela, mas SEM volume
+//   triangulo pequeno = aviso antecipado da branca
+plotshape(entFracaUp, "Rompeu sem volume (long)", shape.circle, location.belowbar, color.new(#00E676, 40), size=size.tiny)
+plotshape(entFracaDn, "Rompeu sem volume (short)", shape.circle, location.abovebar, color.new(#FF1744, 40), size=size.tiny)
 
 // BRANCA — setas pequenas (alerta antecipado, nao sobrepoe amarela)
 bool brcUpSolo = showBrc and rompBrcUp and not rompAmaUp
@@ -580,7 +587,7 @@ if showPanel and barstate.islast
 
     // A regra de ouro do metodo e o FECHAMENTO. Este campo existe para o
     // usuario ver isso enquanto a vela ainda esta viva.
-    string vTxt = velaFechada ? "FECHADA ✓" : "ABERTA — faltam " + str.tostring(minRestante, "#") + " min"
+    string vTxt = velaFechada ? "FECHADA ✓" : minRestante < 1 ? "FECHANDO AGORA" : "ABERTA — faltam " + str.tostring(minRestante, "#") + " min"
     color vCor = velaFechada ? cV : cL
     table.cell(pan, 0, 2, "Vela", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
     table.cell(pan, 1, 2, vTxt, text_color=vCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
@@ -600,7 +607,7 @@ if showPanel and barstate.islast
     table.cell(pan, 0, 4, "Estado", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
     table.cell(pan, 1, 4, eTxt + eSuf, text_color=eCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
 
-    string spTxt = na(spread) ? "—" : (spread >= 0 ? "+" : "") + f_num(spread, "#.##") + "%"
+    string spTxt = na(spread) ? "—" : (spread >= 0 ? "+" : "") + f_num(spread, "0.00") + "%"
     color spCor = na(spread) ? cG : spread > 0 ? cV : spread < 0 ? cR : cG
     table.cell(pan, 0, 5, "Spread (seu ganho)", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
     table.cell(pan, 1, 5, spTxt, text_color=spCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
@@ -609,7 +616,7 @@ if showPanel and barstate.islast
     string voTxt = "—"
     color voCor = cG
     if showVol and sigBar > 0 and not na(sigVolRatio)
-        voTxt := f_num(sigVolRatio, "#.#") + "x a média" + (sigVolRatio >= volPicoMul ? "  ◆ CONFIRMADA" : "  (sem confirmação)")
+        voTxt := f_num(sigVolRatio, "0.0") + "x a média" + (sigVolRatio >= volPicoMul ? "  ◆ CONFIRMADA" : "  (sem confirmação)")
         voCor := sigVolRatio >= volPicoMul ? cV : cL
     table.cell(pan, 0, 6, "Volume da entrada", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
     table.cell(pan, 1, 6, voTxt, text_color=voCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
@@ -618,7 +625,7 @@ if showPanel and barstate.islast
     // de entrar: "eu tenho possivelmente um spread menor, porque esta perto da
     // resistencia". Fica no bloco 2 (aparece tambem no celular) porque e
     // decisao de entrada, nao contexto.
-    string esTxt = not showSR ? "—" : (na(srDistAcima) ? "—" : "↑ " + f_num(srDistAcima, "#.#") + "%") + "   /   " + (na(srDistAbaixo) ? "—" : "↓ " + f_num(srDistAbaixo, "#.#") + "%")
+    string esTxt = not showSR ? "—" : (na(srDistAcima) ? "—" : "↑ " + f_num(srDistAcima, "0.0") + "%") + "   /   " + (na(srDistAbaixo) ? "—" : "↓ " + f_num(srDistAbaixo, "0.0") + "%")
     color esCor = cG
     if showSR and pos != 0
         float espaco = pos == 1 ? srDistAcima : srDistAbaixo
@@ -629,7 +636,7 @@ if showPanel and barstate.islast
     string ulTxt = "—"
     color ulCor = cG
     if ultDir != 0 and not na(ultResult)
-        ulTxt := (ultDir == 1 ? "LONG " : "SHORT ") + (ultResult >= 0 ? "+" : "") + f_num(ultResult, "#.##") + "%  ·  " + str.tostring(ultVelas) + " velas"
+        ulTxt := (ultDir == 1 ? "LONG " : "SHORT ") + (ultResult >= 0 ? "+" : "") + f_num(ultResult, "0.00") + "%  ·  " + str.tostring(ultVelas) + " velas"
         ulCor := ultResult > 0 ? cV : ultResult < 0 ? cR : cG
     table.cell(pan, 0, 8, "Última operação", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
     table.cell(pan, 1, 8, ulTxt, text_color=ulCor, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
@@ -652,7 +659,7 @@ if showPanel and barstate.islast
 
         string pqTxt = "—"
         if sigBar > 0
-            pqTxt := "fechou " + f_num(sigDist, "#.##") + "%" + (sigDir == 1 ? " ACIMA" : " ABAIXO") + " da amarela, " + (sigForte ? "corpo forte" : "corpo fraco") + (na(sigVolRatio) ? "" : ", volume " + f_num(sigVolRatio, "#.#") + "x")
+            pqTxt := "fechou " + f_num(sigDist, "0.00") + "%" + (sigDir == 1 ? " ACIMA" : " ABAIXO") + " da amarela, " + (sigForte ? "corpo forte" : "corpo fraco") + (na(sigVolRatio) ? "" : ", volume " + f_num(sigVolRatio, "0.0") + "x")
         table.cell(pan, 0, 12, "Por quê", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
         table.cell(pan, 1, 12, pqTxt, text_color=cG, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
 
@@ -661,12 +668,12 @@ if showPanel and barstate.islast
         table.cell(pan, 0, 13, "Zona", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
         table.cell(pan, 1, 13, zTxt, text_color=zCor, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
 
-        string dTxt = (distW >= 0 ? "+" : "") + f_num(distW, "#.##") + "%   /   " + (distY >= 0 ? "+" : "") + f_num(distY, "#.##") + "%"
+        string dTxt = (distW >= 0 ? "+" : "") + f_num(distW, "0.00") + "%   /   " + (distY >= 0 ? "+" : "") + f_num(distY, "0.00") + "%"
         table.cell(pan, 0, 14, "Distância da branca / amarela", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
         table.cell(pan, 1, 14, dTxt, text_color=cG, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
 
         // ══ BLOCO 4 — DISCIPLINA ══
-        string gTxt = not showGiro ? "—" : str.tostring(opsJanela, "#") + " operações  ·  pagou ~" + f_num(custoGiro, "#.##") + "% em taxa"
+        string gTxt = not showGiro ? "—" : str.tostring(opsJanela, "#") + " operações  ·  pagou ~" + f_num(custoGiro, "0.00") + "% em taxa"
         color gCor = not showGiro ? cG : custoGiro >= 3.0 ? cR : custoGiro >= 1.5 ? cL : cG
         string gLbl = "Operações em " + str.tostring(diasJanela, "#") + " dias"
         table.cell(pan, 0, 15, gLbl, text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)

@@ -200,7 +200,7 @@ momento:
 
 #### Vela
 
-> `ABERTA — faltam 44 min` ou `FECHADA ✓`
+> `ABERTA — faltam 44 min` · `FECHANDO AGORA` · `FECHADA ✓`
 
 **Este campo existe para te impedir de cometer o erro nº 1 de quem começa.**
 
@@ -415,6 +415,7 @@ Cores: cinza (até 1,5%) · laranja (1,5% a 3%) · **vermelho (acima de 3%)**
 | **◆ laranja pequeno** | junto da seta | **pico de volume** naquele rompimento | é dos bons. Preste atenção |
 | **linha tracejada vermelha** | atravessa o gráfico | **resistência** vinda do gráfico diário | teto provável do movimento |
 | **linha tracejada verde** | atravessa o gráfico | **suporte** vindo do gráfico diário | piso provável do movimento |
+| ● círculo pequeno | abaixo/acima da vela | rompeu a amarela **sem volume** | é sinal, mas dos fracos |
 | △ verde claro pequeno | abaixo da vela | preço cruzou a **branca** | só aviso. **Não é entrada** |
 | ▽ vermelho claro pequeno | acima da vela | preço cruzou a **branca** | só aviso. **Não é entrada** |
 | ✕ cinza | acima/abaixo | **falso rompimento** | nada. É o erro que você evitou |
