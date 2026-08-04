@@ -71,10 +71,28 @@ indicator("ES Rompimentos SMAs B&A v1.2", "ES_B&A v1.2", overlay=true, max_label
 //   - ULTIMA OPERACAO: quanto rendeu a que acabou de fechar, e em quantas
 //     velas. O spread sumia no instante do flip e o usuario nunca via em quanto
 //     terminou o que fez — sem ver o resultado nao ha aprendizado.
+//   VARREDURA DO PAINEL (04/08/2026, a pedido do Ricardo)
+//   - BUG DE PRECEDENCIA: "SINAL SE FORMANDO" vinha antes de "PODE VIRAR". Com
+//     o usuario posicionado e o preco cruzando a amarela ao contrario, as duas
+//     condicoes ficam verdadeiras — e vencia a errada. Ele lia "sinal se
+//     formando" (soa como oportunidade de entrada) quando o que estava em jogo
+//     era a SAIDA da operacao aberta dele. Invertida a ordem.
+//   - Fim do jargao: "Giro na janela / 45 ops" virou "Operacoes em 30 dias /
+//     45 operacoes · pagou ~4,5% em taxa". O rotulo calcula o periodo em DIAS
+//     a partir do timeframe do grafico — "360 velas" nao diz nada a quem esta
+//     aprendendo, e muda de sentido conforme o TF.
+//   - "Dist." -> "Distancia". "Spread" -> "Spread (seu ganho)".
+//   - Acentos nos textos do painel (o Pine aceita UTF-8 em string).
+//   - Virgula decimal: "4.5%" num painel em portugues le-se como erro de
+//     digitacao. f_num() troca o ponto pela virgula.
+//   - Hierarquia de fonte padronizada: ROTULO sempre menor que o VALOR. Estava
+//     embaralhado — alguns rotulos maiores que a propria informacao, o que
+//     inverte a ordem de leitura do olho.
+//
 //   - VOLUME DO ROMPIMENTO: o unico filtro que sobreviveu ao teste estatistico
 //     de toda a auditoria. Volume >= 2,5x a media no candle que rompe leva o
 //     acerto de 22% para 43% (p=0,0002), com efeito monotonico. Aparece no
-//     painel, no campo "Por que", como losango ◆ no grafico e como alerta
+//     painel, no campo "Por quê", como losango ◆ no grafico e como alerta
 //     proprio. NAO filtra sinal: informa que este e dos bons. O delta de
 //     compra/venda foi medido e FICOU DE FORA — nao sobrevive a correcao para
 //     multiplos testes e e o dado mais caro de obter no Pine. Ver ESTUDO_VOLUME.md.
@@ -296,6 +314,9 @@ bool sinalFormando = ok and not velaFechada and ((ladoReal[1] == -1 and close > 
 // 44 flips e paguei por todos".
 
 float opsJanela = math.sum((rompAmaUp or rompAmaDn) ? 1.0 : 0.0, giroJanela)
+// O rotulo diz o periodo em DIAS, nao em velas: "360 velas" nao significa nada
+// para quem esta aprendendo, e o numero muda de sentido conforme o timeframe.
+float diasJanela = giroJanela * (timeframe.in_seconds() / 60.0) / 1440.0
 float custoGiro = opsJanela * taxaLado * 2.0
 
 
@@ -334,6 +355,11 @@ alertcondition(rompBrcDn, "Rompeu Branca ↓", "ES B&A: Alerta — rompeu branca
 alertcondition(falsoUp or falsoDn, "Falso Rompimento", "ES B&A: Falso rompimento da amarela")
 
 
+// Numero em portugues usa VIRGULA decimal. str.tostring devolve ponto, e
+// "4.5%" num painel em portugues le-se como erro de digitacao.
+f_num(float v, string fmt) => str.replace_all(str.tostring(v, fmt), ".", ",")
+
+
 // ── PAINEL ──────────────────────────────────────────────────────────────
 
 tPos = panelPos == "Direita Superior" ? position.top_right : panelPos == "Direita Inferior" ? position.bottom_right : panelPos == "Esquerda Superior" ? position.top_left : position.bottom_left
@@ -370,7 +396,7 @@ if showPanel and barstate.islast
     // Um leigo nao precisa de diagnostico de mercado; precisa saber o que fazer
     // com o dinheiro dele. Por isso esta linha vem antes de qualquer outra.
 
-    table.cell(pan, 0, 0, "ES B&A v1.2  ·  entrada e saida", text_color=cB, text_size=szTit, bgcolor=cH, text_halign=text.align_center)
+    table.cell(pan, 0, 0, "ES B&A v1.2  ·  entrada e saída", text_color=cB, text_size=szTit, bgcolor=cH, text_halign=text.align_center)
     table.merge_cells(pan, 0, 0, 1, 0)
 
     // Textos mais curtos no celular: uma frase que quebra em duas linhas deixa
@@ -379,13 +405,17 @@ if showPanel and barstate.islast
     string agora = "—"
     color agoraCor = cG
     if pos == 0
-        agora := "AGUARDE O 1o SINAL"
+        agora := "AGUARDE O 1º SINAL"
         agoraCor := cG
+    else if podeVirar
+        // ANTES de "sinal se formando": quem esta posicionado precisa saber que
+        // a operacao DELE pode fechar, nao que ha uma entrada nascendo. As duas
+        // condicoes ficam verdadeiras ao mesmo tempo, e ate aqui vencia a
+        // errada — a mensagem soava como oportunidade quando era risco.
+        agora := ehCel ? "PODE VIRAR — espere fechar" : "PODE VIRAR — espere a vela fechar"
+        agoraCor := cL
     else if sinalFormando
         agora := ehCel ? "FORMANDO — espere fechar" : "SINAL SE FORMANDO — espere a vela fechar"
-        agoraCor := cL
-    else if podeVirar
-        agora := ehCel ? "PODE VIRAR — espere fechar" : "PODE VIRAR — espere a vela fechar"
         agoraCor := cL
     else if saiuAgora
         // As DUAS metades do flip. Ate aqui o painel so dizia "ENTROU SHORT" e
@@ -408,8 +438,8 @@ if showPanel and barstate.islast
     // usuario ver isso enquanto a vela ainda esta viva.
     string vTxt = velaFechada ? "FECHADA ✓" : "ABERTA — faltam " + str.tostring(minRestante, "#") + " min"
     color vCor = velaFechada ? cV : cL
-    table.cell(pan, 0, 2, "Vela", text_color=cB, text_size=szTxt, bgcolor=cF, text_halign=text.align_left)
-    table.cell(pan, 1, 2, vTxt, text_color=vCor, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 0, 2, "Vela", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 2, vTxt, text_color=vCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
 
     // O numero que se leva para a corretora. Distancia em % nao serve para
     // colocar ordem; preco serve.
@@ -423,14 +453,14 @@ if showPanel and barstate.islast
     string eTxt = pos == 1 ? "LONG ▲" : pos == -1 ? "SHORT ▼" : "FORA ○"
     string eSuf = (pos != 0 and sigBar > 0) ? "  ·  " + str.tostring(candlesDesde) + " velas" : ""
     color eCor = pos == 1 ? cV : pos == -1 ? cR : cG
-    table.cell(pan, 0, 4, "Estado", text_color=cB, text_size=szTxt, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 0, 4, "Estado", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
     table.cell(pan, 1, 4, eTxt + eSuf, text_color=eCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
 
     // "Voce segura e captura o spread" — o guia sempre disse isso, e ate a v1.1
     // o painel nao mostrava o spread.
-    string spTxt = na(spread) ? "—" : (spread >= 0 ? "+" : "") + str.tostring(spread, "#.##") + "%"
+    string spTxt = na(spread) ? "—" : (spread >= 0 ? "+" : "") + f_num(spread, "#.##") + "%"
     color spCor = na(spread) ? cG : spread > 0 ? cV : spread < 0 ? cR : cG
-    table.cell(pan, 0, 5, "Spread", text_color=cB, text_size=szTxt, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 0, 5, "Spread (seu ganho)", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
     table.cell(pan, 1, 5, spTxt, text_color=spCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
 
     // VOLUME — o unico filtro que sobreviveu ao teste estatistico da auditoria.
@@ -438,7 +468,7 @@ if showPanel and barstate.islast
     string voTxt = "—"
     color voCor = cG
     if showVol and sigBar > 0 and not na(sigVolRatio)
-        voTxt := str.tostring(sigVolRatio, "#.#") + "x a media" + (sigVolRatio >= volPicoMul ? "  ◆ PICO" : "")
+        voTxt := f_num(sigVolRatio, "#.#") + "x a média" + (sigVolRatio >= volPicoMul ? "  ◆ PICO" : "")
         voCor := sigVolRatio >= volPicoMul ? cV : sigVolRatio >= 1.0 ? cG : cL
     table.cell(pan, 0, 6, "Volume da entrada", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
     table.cell(pan, 1, 6, voTxt, text_color=voCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
@@ -451,40 +481,41 @@ if showPanel and barstate.islast
     if ultDir != 0 and not na(ultResult)
         ulTxt := (ultDir == 1 ? "LONG " : "SHORT ") + (ultResult >= 0 ? "+" : "") + str.tostring(ultResult, "#.##") + "%  ·  " + str.tostring(ultVelas) + " velas"
         ulCor := ultResult > 0 ? cV : ultResult < 0 ? cR : cG
-    table.cell(pan, 0, 7, "Ultima operacao", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 0, 7, "Última operação", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
     table.cell(pan, 1, 7, ulTxt, text_color=ulCor, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
 
     // ══ BLOCO 3 — POR QUE (so no monitor) ══
     if not ehCel
 
-        string fTxt = sigBar == 0 ? "—" : sigForte ? "FORTE ◆" : "TIMIDO ◇"
+        string fTxt = sigBar == 0 ? "—" : sigForte ? "FORTE ◆" : "TÍMIDO ◇"
         color fCor = sigBar == 0 ? cG : sigForte ? cV : cG
-        table.cell(pan, 0, 8, "Forca da entrada", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+        table.cell(pan, 0, 8, "Força da entrada", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
         table.cell(pan, 1, 8, fTxt, text_color=fCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
 
         // O "por que" existe para o usuario associar causa e efeito e aprender
         // a ler o grafico sozinho — que e o objetivo de tirar as rodinhas.
         string pqTxt = "—"
         if sigBar > 0
-            pqTxt := "fechou " + str.tostring(sigDist, "#.##") + "%" + (sigDir == 1 ? " ACIMA" : " ABAIXO") + " da amarela, " + (sigForte ? "corpo forte" : "corpo fraco") + (na(sigVolRatio) ? "" : ", volume " + str.tostring(sigVolRatio, "#.#") + "x")
-        table.cell(pan, 0, 9, "Por que", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+            pqTxt := "fechou " + f_num(sigDist, "#.##") + "%" + (sigDir == 1 ? " ACIMA" : " ABAIXO") + " da amarela, " + (sigForte ? "corpo forte" : "corpo fraco") + (na(sigVolRatio) ? "" : ", volume " + f_num(sigVolRatio, "#.#") + "x")
+        table.cell(pan, 0, 9, "Por quê", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
         table.cell(pan, 1, 9, pqTxt, text_color=cG, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
 
         // DESCREVE a zona. Ate a v1.1 dizia "NAO ENTRE" contradizendo a seta.
-        string zTxt = not ok ? "—" : zAcima ? "acima das duas medias" : zAbaixo ? "abaixo das duas medias" : "entre as medias — nao consolidado"
+        string zTxt = not ok ? "—" : zAcima ? "acima das duas médias" : zAbaixo ? "abaixo das duas médias" : "entre as médias — não consolidado"
         color zCor = not ok ? cG : zAcima ? cV : zAbaixo ? cR : cL
         table.cell(pan, 0, 10, "Zona", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
         table.cell(pan, 1, 10, zTxt, text_color=zCor, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
 
-        string dTxt = (distW >= 0 ? "+" : "") + str.tostring(distW, "#.##") + "%   /   " + (distY >= 0 ? "+" : "") + str.tostring(distY, "#.##") + "%"
-        table.cell(pan, 0, 11, "Dist. branca / amarela", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+        string dTxt = (distW >= 0 ? "+" : "") + str.tostring(distW, "#.##") + "%   /   " + (distY >= 0 ? "+" : "") + f_num(distY, "#.##") + "%"
+        table.cell(pan, 0, 11, "Distância da branca / amarela", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
         table.cell(pan, 1, 11, dTxt, text_color=cG, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
 
         // ══ BLOCO 4 — DISCIPLINA ══
         // O leigo nao quebra por errar a direcao. Quebra por giro.
-        string gTxt = not showGiro ? "—" : str.tostring(opsJanela, "#") + " ops  ·  taxa ~" + str.tostring(custoGiro, "#.##") + "%"
+        string gTxt = not showGiro ? "—" : str.tostring(opsJanela, "#") + " operações  ·  pagou ~" + f_num(custoGiro, "#.##") + "% em taxa"
         color gCor = not showGiro ? cG : custoGiro >= 3.0 ? cR : custoGiro >= 1.5 ? cL : cG
-        table.cell(pan, 0, 12, "Giro na janela", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
+        string gLbl = "Operações em " + str.tostring(diasJanela, "#") + " dias"
+        table.cell(pan, 0, 12, gLbl, text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
         table.cell(pan, 1, 12, gTxt, text_color=gCor, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
 
 // ══════════════════════════════════════════════════════════════════════════

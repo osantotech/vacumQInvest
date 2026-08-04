@@ -153,6 +153,11 @@ momento:
 | **SINAL SE FORMANDO — espere a vela fechar** | o preço cruzou, mas a vela não fechou | **não faça nada ainda** |
 | **PODE VIRAR — espere a vela fechar** | você está posicionado e pode ser saída | **segure e espere** |
 
+> **Se você está posicionado, "PODE VIRAR" tem prioridade sobre qualquer outro
+> aviso.** É a mensagem que diz respeito ao dinheiro que já está na mesa: a sua
+> operação pode fechar nesta vela. "SINAL SE FORMANDO" só aparece quando você
+> ainda não tem nada aberto.
+
 > **A mais importante da lista é "SAIU DO LONG → ENTROU SHORT".** No método do
 > Bruno, sair e entrar são **o mesmo momento**. Quando o preço fecha do outro
 > lado da amarela, você fecha a operação que tinha *e* abre a contrária. É uma
@@ -204,7 +209,7 @@ Em que posição o método diz que você deveria estar, e há quantas velas.
 
 *"14 velas"* em gráfico de 2h significa que você está nessa posição há 28 horas.
 
-#### Spread
+#### Spread (seu ganho)
 
 > `+1,15%`
 
@@ -309,7 +314,7 @@ Onde o preço está em relação às duas linhas:
 > "entre", isso era só uma contradição na tela. Agora ele **descreve** em vez
 > de mandar.
 
-#### Dist. branca / amarela
+#### Distância da branca / amarela
 
 > `+0.37% / +0.92%`
 
@@ -317,14 +322,22 @@ Distância do preço até cada uma das linhas, em porcentagem. Serve para você
 saber se o preço está colado nelas (pode virar a qualquer hora) ou longe
 (tendência esticada).
 
-#### Giro na janela
+#### Operações em 30 dias
 
-> `45 ops · taxa ~4.5%`
+> `45 operações · pagou ~4,5% em taxa`
 
 **O campo mais desconfortável — e por isso o mais importante.**
 
-Mostra quantas operações o método gerou nos últimos 30 dias e quanto isso
-custaria só em **taxa de corretora**.
+Mostra quantas operações o método gerou no período e quanto isso custou só em
+**taxa de corretora**.
+
+**O que conta como "uma operação":** cada vez que o preço rompe a amarela, você
+fecha o que tinha e abre o contrário. Isso conta como **1 operação** — e a
+corretora cobra nas **duas pontas** (ao fechar e ao abrir). Por isso a conta é
+`operações × taxa × 2`.
+
+O rótulo mostra o período em dias, calculado a partir do gráfico que você está
+usando. Em 2 horas, o padrão de 360 velas dá exatamente 30 dias.
 
 Toda vez que você entra e sai, a corretora cobra ~0,05% de cada lado. Parece
 pouco. Multiplicado por 45 operações, vira 4,5% do seu dinheiro por mês —
@@ -386,6 +399,11 @@ contra 618 setas de entrada** — mais que os próprios sinais, e polui o gráfi
    - **O campo Por quê** — leia. É seu treino.
 5. **Antes de entrar, anote o "Sai se fechar".** É a sua saída, definida antes
    de você arriscar dinheiro. **Nunca entre sem saber onde vai sair.**
+
+   ⚠ **Esse número muda a cada vela.** A linha amarela é uma média móvel: ela
+   se move junto com o preço. Não coloque uma ordem de stop fixa nele e esqueça
+   — confira o valor toda vez que olhar o gráfico. Nesse método o stop
+   *acompanha* a operação; ele não fica parado.
 6. **Depois de entrar, não fique olhando.** Em 2 horas, uma vela demora 2 horas.
    Olhar de 5 em 5 minutos só gera ansiedade e decisão ruim.
 7. **Quando a seta contrária aparecer:** feche a operação. Abra a contrária se
@@ -454,6 +472,8 @@ Você quase não precisa mexer. Os que importam:
    quebra uma conta, e não tem indicador que salve.
 7. **Achar que ◆ é garantia.** 46% de acerto ainda quer dizer que **mais da
    metade erra.**
+8. **Colocar stop fixo no "Sai se fechar" e esquecer.** Aquele número se move a
+   cada vela. Confira sempre.
 
 ---
 
