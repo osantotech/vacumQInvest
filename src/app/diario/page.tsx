@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { formatDateTimeFullBR, formatDurationBetween } from '@/lib/calculations';
 import type { PainelSnapshot } from '@/lib/types';
+import { avaliarSinal } from '@/lib/veredito';
 import './diario.css';
 
 interface ResultadoDiario {
@@ -77,6 +78,13 @@ const ROTULOS: Record<string, string> = {
 function rotulo(v: string | null | undefined): string {
   if (!v) return '—';
   return ROTULOS[v] ?? v;
+}
+
+/** Glifo do veredito. Cor sozinha não basta: ~8% dos homens não a distinguem. */
+function marcaVeredito(nivel: string): string {
+  if (nivel === 'invalidado') return '✕';
+  if (nivel === 'limpo') return '✓';
+  return '⚠';
 }
 
 /** "120" é o que o Pine grava; "2h" é o que o trader lê. */
@@ -215,6 +223,12 @@ export default function Diario() {
             const r = primeiroResultado(e.results);
             const long = e.direcao === 'LONG' || e.direcao === 'SCALP_LONG';
             const p = e.painel;
+            const v = avaliarSinal({
+              painel: p,
+              tp1: e.tp1,
+              tp2: e.tp2,
+              correlacao_btc: e.correlacao_btc,
+            });
 
             return (
               <article key={e.id} className={`di-card ${r ? 'fechado' : 'aberto'}`}>
@@ -233,6 +247,30 @@ export default function Diario() {
                     {r && <> · durou {formatDurationBetween(e.created_at, r.data_saida)}</>}
                   </div>
                 </header>
+
+                {/* Veredito — a leitura que o usuário tinha de montar sozinho */}
+                {v && (
+                  <div className={`di-veredito ${v.nivel}`}>
+                    <div className="di-veredito-topo">
+                      <span className="di-veredito-marca" aria-hidden="true">{marcaVeredito(v.nivel)}</span>
+                      <strong>{v.titulo}</strong>
+                    </div>
+
+                    {v.motivo && <p className="di-veredito-motivo">{v.motivo}</p>}
+
+                    {v.ressalvas.length > 0 && (
+                      <ul className="di-veredito-lista">
+                        {v.ressalvas.map((t, i) => <li key={i}>{t}</li>)}
+                      </ul>
+                    )}
+
+                    {/* Sempre visível, inclusive no "sem ressalvas" — é justamente
+                        ali que a leitura corre mais risco de virar recomendação. */}
+                    <p className="di-veredito-nota">
+                      Leitura automática dos campos abaixo, não é recomendação. A decisão de operar é sua.
+                    </p>
+                  </div>
+                )}
 
                 {/* Níveis */}
                 <div className="di-linha">
