@@ -38,7 +38,7 @@ enviar() {
     -H 'Content-Type: application/json' --data "$corpo"
 }
 
-# Mesmo formato que o bloco alert() do Pine monta (indicadores/vq-pullback/),
+# Mesmo formato que o bloco alert() do VQ_Pullback_v1_9.pine monta,
 # incluindo o tp3 ausente (só existem dois alvos: extensões -0.27 e -0.62) e os
 # três campos do drone. `alinhado_htf` vai sem aspas de propósito: é booleano
 # JSON, e null nele significa "o gráfico maior não respondeu", não "está contra".

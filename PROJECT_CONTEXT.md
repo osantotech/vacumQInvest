@@ -31,7 +31,7 @@ Existe também `/api/scanner`, que varre a Binance Futures sozinho e grava em
 `scanner_signals`. É o caminho previsto para escalar além do limite de alertas
 do TradingView. Está funcional, mas ainda não alimenta `alerts`/`results`.
 
-## 3. O indicador — `indicadores/vq-pullback/VQ_Pullback_v1_9.pine`
+## 3. O indicador — `VQ_Pullback_v1_9.pine`
 
 O bloco de webhook fica no fim do arquivo. Regras que ele implementa:
 
@@ -125,7 +125,7 @@ A tela em Configurações faz as duas de uma vez. Admin atual:
 
 ## 8-B. Auditoria do Pine (02/08/2026)
 
-Relatório completo em `indicadores/vq-pullback/AUDITORIA_PINE_v1_8.md` (auditoria da v1.8, corrigida na v1.9). **14 achados.** O que o leitor
+Relatório completo em `AUDITORIA_PINE_v1_8.md` (auditoria da v1.8, corrigida na v1.9). **14 achados.** O que o leitor
 futuro precisa saber sem abrir o relatório:
 
 **O que passou:** motor PST fiel ao algoritmo original; **sem repaint nos
