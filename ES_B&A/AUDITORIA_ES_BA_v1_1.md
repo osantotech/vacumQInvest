@@ -82,7 +82,7 @@ médias não têm dados.
 
 | # | Achado | Tipo | Gravidade |
 |---|---|---|---|
-| 1 | O indicador manda entrar e não entrar ao mesmo tempo | **Contradição** | **Alta** |
+| 1 | O indicador manda entrar e não entrar ao mesmo tempo — e o guia repete a contradição | **Contradição** | **Alta** |
 | 2 | "CRÍTICA ⚠" aparece quando não há dado nenhum | Borda | Baixa |
 | 3 | Rompimento e falso usam critérios diferentes de "lado" | Inconsistência | Baixa |
 | 4 | FORTE/TÍMIDO espreme três estados em dois rótulos | Rotulagem | Média |
@@ -175,6 +175,62 @@ quase toda vela que a toca sem confirmar marca um ✕. O input `showFalso` permi
 desligar, e provavelmente é o que se deve fazer em uso diário.
 
 ---
+
+## 4-B. O guia do próprio indicador
+
+`Guia_ES_Rompimentos_BA_v1_1.md` foi lido depois e **confirma os achados — e
+agrava o principal.**
+
+### O guia se contradiz consigo mesmo
+
+**Seção 3, "As 3 zonas":**
+> **CRÍTICA ⚠** — preço **entre** as duas médias → zona de indecisão. O Bruno
+> ensina: **não entre aqui**, espere a definição.
+
+**Seção 6, "Fluxo de uso", passos 2 a 4:**
+> 2. Espere uma **▲ verde grande** […]
+> 3. Confira no painel: **Zona** está a favor? **Força** é FORTE?
+> 4. **Entre na direção do sinal.**
+
+O passo 3 faz a pergunta certa — e o passo 4 **não usa a resposta**. Não há
+condicional, não há "se a zona estiver crítica, não entre". O leitor confere a
+zona e entra de qualquer jeito, porque é o que o passo seguinte manda.
+
+**O achado 1 não é só do código: está na documentação também.** Em 14,1% dos
+sinais o usuário que seguir o guia à risca vai entrar exatamente onde o mesmo
+guia disse para não entrar, três seções antes.
+
+### O que o guia acerta
+
+**A descrição de FORTE/TÍMIDO está correta.** A seção 4 diz *"TÍMIDO = corpo
+pequeno **ou** fechou quase em cima da linha"*, que é exatamente
+`not (corpoForte and not ehTimido)`. O achado 4 continua valendo — três estados
+num rótulo só perde informação —, mas a documentação não engana: descreve o que
+o código faz.
+
+**A seção 7 é honesta sobre os limites.** Declara que o indicador não tem PST,
+Fibonacci, volume nem filtro de outro timeframe, e que isso é **por desenho**.
+Melhor do que a maioria dos indicadores documenta.
+
+**A seção 8 é o melhor pedaço do guia:**
+> Os sinais mostram **onde o método manda entrar e sair** — não a probabilidade
+> de lucro. Um rompimento FORTE pode falhar; um TÍMIDO pode dar certo.
+
+Isso está certo e é exatamente o que os números confirmam. O guia não promete
+desempenho em lugar nenhum.
+
+### Uma promessa que os dados não sustentam
+
+**Seção 2:**
+> **v1.1 corrigiu** a detecção do falso […] **Menos ✕ falsos**, mais fiéis ao
+> que o Bruno mostra.
+
+A frase é relativa à v1.0 e pode ser verdadeira — não temos a v1.0 para comparar.
+Mas o leitor entende "poucos ✕", e a medição diz o contrário: **672 falsos
+contra 618 setas de entrada**. O ✕ é o símbolo mais frequente do indicador.
+
+Sugestão de redação, se um dia o guia for revisado: dizer que ficaram *mais
+precisos*, não *menos numerosos*.
 
 ## 5. A contradição com o VQ Pullback — e por que ela existe
 
