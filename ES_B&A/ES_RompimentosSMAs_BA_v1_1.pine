@@ -1,0 +1,242 @@
+//@version=5
+indicator("ES Rompimentos SMAs B&A v1.1", "ES_B&A v1.1", overlay=true, max_labels_count=500)
+
+// ══════════════════════════════════════════════════════════════════════════
+// INDICADOR 3 — ES Rompimentos SMAs Branca & Amarela v1.1
+// ──────────────────────────────────────────────────────────────────────────
+// Baseado exclusivamente na aula:
+//   MAC3.0 — Como entrar e sair de uma operacao (Bruno Aguiar)
+//
+// Ciclo operacional (auditado do video):
+//   1. Candle FECHA acima da SMA amarela  → ENTRADA LONG  (seta verde grande)
+//   2. Segure enquanto amarela nao for rompida no contrario
+//   3. Candle FECHA abaixo da SMA amarela → SAIDA LONG + ENTRADA SHORT (flip)
+//   4. Repete
+//
+// Regra Bruno [01:27]: "Rompeu, fechou acima — ou rompeu pra baixo, fechou abaixo"
+// Regra Bruno [20:21]: "Rompeu e voltou pra baixo, nao fechou acima da amarela"
+// Regra Bruno [21:41]: "Enquanto nao romper a amarela, continua na operacao"
+// Regra Bruno [22:05]: "Voce nao so sai da operacao, voce entra novamente"
+// Regra Bruno [23:21]: "Se o rompimento e com forca, mais certo ainda"
+// TF recomendado Bruno [17:36]: Grafico de 2 horas (MAC)
+//
+// Branca: alerta antecipado (seta menor) — preco cruzou a rapida
+// Falso rompimento: tocou amarela mas NAO fechou alem (x cinza)
+//
+// ── HISTORICO ──
+// v1.0: motor de deteccao (rompimento amarela/branca, flip, forca, painel)
+// v1.1: 3 correcoes + tamanho de tabela WEB/Celular
+//   - Falso rompimento corrigido (usava candle anterior; agora usa lado real)
+//   - zCritica removida (era codigo morto)
+//   - Tamanho do painel selecionavel: WEB (default) ou Celular
+// ══════════════════════════════════════════════════════════════════════════
+
+
+// ── INPUTS ──────────────────────────────────────────────────────────────
+
+grpSMA = "══ SMAs ══"
+int smaWLen = input.int(8, "SMA Branca (rapida)", minval=2, group=grpSMA)
+int smaYLen = input.int(21, "SMA Amarela (tendencia)", minval=2, group=grpSMA)
+
+grpExib = "══ Exibicao ══"
+bool showBrc = input.bool(true, "Sinais da Branca (alerta antecipado)", group=grpExib)
+bool showFalso = input.bool(true, "Falsos rompimentos (x)", group=grpExib)
+bool showPanel = input.bool(true, "Painel", group=grpExib)
+string panelPos = input.string("Direita Superior", "Posicao do painel", options=["Direita Superior", "Direita Inferior", "Esquerda Superior", "Esquerda Inferior"], group=grpExib)
+string panelSize = input.string("WEB", "Tamanho do painel", options=["WEB", "Celular"], tooltip="WEB = compacto para monitor. Celular = maior e mais legivel na tela pequena.", group=grpExib)
+
+grpForca = "══ Forca do Rompimento ══"
+int forcaLB = input.int(14, "Lookback corpo medio", minval=5, group=grpForca)
+float forcaMul = input.float(1.5, "Corpo > Nx media = FORTE", minval=1.0, step=0.1, group=grpForca)
+float timiPct = input.float(0.3, "Dist < N% da amarela = TIMIDO", minval=0.05, step=0.05, group=grpForca)
+
+
+// ── SMAs ────────────────────────────────────────────────────────────────
+
+float smaW = ta.sma(close, smaWLen)
+float smaY = ta.sma(close, smaYLen)
+
+plot(smaW, "SMA Branca", color.white, 2)
+plot(smaY, "SMA Amarela", color.yellow, 2)
+
+bool ok = not na(smaW) and not na(smaY)
+
+
+// ── ROMPIMENTOS — Deteccao ──────────────────────────────────────────────
+
+// AMARELA — sinal principal de entrada / saida / flip
+// Bruno [01:27]: "Rompeu, fechou acima" = close cruza a SMA com confirmacao
+bool rompAmaUp = ok and close > smaY and close[1] <= smaY[1]
+bool rompAmaDn = ok and close < smaY and close[1] >= smaY[1]
+
+// BRANCA — alerta antecipado (primeiro sinal de mudanca)
+bool rompBrcUp = ok and close > smaW and close[1] <= smaW[1]
+bool rompBrcDn = ok and close < smaW and close[1] >= smaW[1]
+
+// FALSO ROMPIMENTO da amarela
+// Bruno [20:21]: "Rompeu e voltou pra baixo, nao fechou acima da amarela"
+// Correcao v1.1: o falso e detectado contra o LADO REAL confirmado do preco,
+// nao apenas contra o candle imediatamente anterior. Rastreamos qual foi o
+// ultimo lado em que o close efetivamente FECHOU (acima ou abaixo da amarela).
+var int ladoReal = 0   // 1 = preco fechado acima da amarela, -1 = abaixo
+if ok and close > smaY
+    ladoReal := 1
+if ok and close < smaY
+    ladoReal := -1
+
+// Falso ALTA: preco estava ABAIXO, pavio furou pra cima, mas close voltou abaixo
+bool falsoUp = ok and ladoReal[1] == -1 and high > smaY and close <= smaY
+// Falso BAIXA: preco estava ACIMA, pavio furou pra baixo, mas close voltou acima
+bool falsoDn = ok and ladoReal[1] == 1 and low < smaY and close >= smaY
+
+
+// ── FORCA DO ROMPIMENTO ─────────────────────────────────────────────────
+// Bruno [23:21]: "Se o rompimento e com forca, mais certo ainda"
+// FORTE = corpo grande (> N× media) E distancia significativa da amarela
+// TIMIDO = corpo pequeno OU close muito perto da amarela
+
+float avgBody = ta.sma(math.abs(close - open), forcaLB)
+float curBody = math.abs(close - open)
+bool corpoForte = not na(avgBody) and curBody > avgBody * forcaMul
+float distYAbs = ok ? math.abs(close - smaY) / smaY * 100 : 0.0
+bool ehTimido = distYAbs < timiPct
+bool ehForte = corpoForte and not ehTimido
+
+
+// ── ESTADO DA POSICAO ───────────────────────────────────────────────────
+// Bruno [22:05]: "Voce nao so sai, voce entra novamente" (flip)
+// pos: 0=FORA, 1=LONG, -1=SHORT
+
+var int pos = 0
+var int sigBar = 0
+var bool sigForte = false
+var int sigDir = 0
+
+if rompAmaUp
+    pos := 1
+    sigBar := bar_index
+    sigForte := ehForte
+    sigDir := 1
+
+if rompAmaDn
+    pos := -1
+    sigBar := bar_index
+    sigForte := ehForte
+    sigDir := -1
+
+int candlesDesde = bar_index - sigBar
+
+
+// ── ZONAS (Estudo TradingView — regra de 3 faixas) ─────────────────────
+// ACIMA:   close > branca E close > amarela → tendencia intacta
+// CRITICA: close entre as duas SMAs         → NAO entre, espere
+// ABAIXO:  close < branca E close < amarela → tendencia invalidada
+
+// Zona CRITICA = entre as duas SMAs (nem acima de ambas, nem abaixo de ambas)
+bool zAcima = ok and close > smaW and close > smaY
+bool zAbaixo = ok and close < smaW and close < smaY
+
+float distW = ok ? (close - smaW) / smaW * 100 : 0.0
+float distY = ok ? (close - smaY) / smaY * 100 : 0.0
+
+
+// ── SINAIS NO GRAFICO ───────────────────────────────────────────────────
+
+// AMARELA — setas GRANDES (sinal principal — como Bruno marca no video)
+plotshape(rompAmaUp, "LONG  ▲", shape.triangleup, location.belowbar, color.new(#00E676, 0), size=size.large)
+plotshape(rompAmaDn, "SHORT ▼", shape.triangledown, location.abovebar, color.new(#FF1744, 0), size=size.large)
+
+// BRANCA — setas pequenas (alerta antecipado, nao sobrepoe amarela)
+bool brcUpSolo = showBrc and rompBrcUp and not rompAmaUp
+bool brcDnSolo = showBrc and rompBrcDn and not rompAmaDn
+plotshape(brcUpSolo, "Branca ↑", shape.triangleup, location.belowbar, color.new(#B2FF59, 50), size=size.small)
+plotshape(brcDnSolo, "Branca ↓", shape.triangledown, location.abovebar, color.new(#FF8A80, 50), size=size.small)
+
+// FALSO ROMPIMENTO — x cinza
+plotshape(showFalso and falsoUp, "Falso ↑", shape.xcross, location.abovebar, color.new(color.gray, 30), size=size.tiny)
+plotshape(showFalso and falsoDn, "Falso ↓", shape.xcross, location.belowbar, color.new(color.gray, 30), size=size.tiny)
+
+
+// ── ALERTAS ─────────────────────────────────────────────────────────────
+
+alertcondition(rompAmaUp, "Rompeu Amarela ↑", "ES B&A: ROMPEU AMARELA ↑ — LONG")
+alertcondition(rompAmaDn, "Rompeu Amarela ↓", "ES B&A: ROMPEU AMARELA ↓ — SHORT")
+alertcondition(rompBrcUp, "Rompeu Branca ↑", "ES B&A: Alerta — rompeu branca ↑")
+alertcondition(rompBrcDn, "Rompeu Branca ↓", "ES B&A: Alerta — rompeu branca ↓")
+alertcondition(falsoUp or falsoDn, "Falso Rompimento", "ES B&A: Falso rompimento da amarela")
+
+
+// ── PAINEL ──────────────────────────────────────────────────────────────
+
+tPos = panelPos == "Direita Superior" ? position.top_right : panelPos == "Direita Inferior" ? position.bottom_right : panelPos == "Esquerda Superior" ? position.top_left : position.bottom_left
+
+var table pan = table.new(tPos, 3, 7, bgcolor=color.new(color.black, 20), border_width=1, border_color=color.new(color.gray, 60), frame_width=1, frame_color=color.new(color.white, 70))
+
+if showPanel and barstate.islast
+
+    // Tamanho de texto conforme ambiente
+    // WEB = compacto (size.small / tiny). Celular = maior (size.normal / small).
+    bool ehCel = panelSize == "Celular"
+    string szTit = ehCel ? size.normal : size.small   // titulo
+    string szTxt = ehCel ? size.normal : size.small   // texto principal
+    string szSub = ehCel ? size.small : size.tiny     // texto secundario (candles)
+
+    // Cores padrao
+    color cV = #00E676
+    color cR = #FF1744
+    color cG = color.gray
+    color cL = #FFA726
+    color cB = color.white
+    color cF = color.new(color.black, 30)
+    color cH = color.new(#1565C0, 20)
+
+    // ── Linha 0: Header ──
+    table.cell(pan, 0, 0, "ES Rompimentos B&A v1.1", text_color=cB, text_size=szTit, bgcolor=cH, text_halign=text.align_center)
+    table.merge_cells(pan, 0, 0, 2, 0)
+
+    // ── Linha 1: Estado ──
+    string eTxt = pos == 1 ? "LONG ▲" : pos == -1 ? "SHORT ▼" : "FORA ○"
+    color eCor = pos == 1 ? cV : pos == -1 ? cR : cG
+    table.cell(pan, 0, 1, "Estado", text_color=cB, text_size=szTxt, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 1, eTxt, text_color=eCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+    table.merge_cells(pan, 1, 1, 2, 1)
+
+    // ── Linha 2: Zona ──
+    string zTxt = zAcima ? "ACIMA ✓" : zAbaixo ? "ABAIXO ✗" : "CRITICA ⚠"
+    color zCor = zAcima ? cV : zAbaixo ? cR : cL
+    table.cell(pan, 0, 2, "Zona", text_color=cB, text_size=szTxt, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 2, zTxt, text_color=zCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+    table.merge_cells(pan, 1, 2, 2, 2)
+
+    // ── Linha 3: Ultimo sinal ──
+    string uTxt = sigDir == 1 ? "AMA ↑" : sigDir == -1 ? "AMA ↓" : "—"
+    string uBar = sigBar > 0 ? str.tostring(candlesDesde) + " candles" : "—"
+    color uCor = sigDir == 1 ? cV : sigDir == -1 ? cR : cG
+    table.cell(pan, 0, 3, "Ultimo", text_color=cB, text_size=szTxt, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 3, uTxt, text_color=uCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+    table.cell(pan, 2, 3, uBar, text_color=cG, text_size=szSub, bgcolor=cF, text_halign=text.align_right)
+
+    // ── Linha 4: Forca da entrada ──
+    string fTxt = sigBar == 0 ? "—" : sigForte ? "FORTE ◆" : "TIMIDO ◇"
+    color fCor = sigBar == 0 ? cG : sigForte ? cV : cG
+    table.cell(pan, 0, 4, "Forca", text_color=cB, text_size=szTxt, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 4, fTxt, text_color=fCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+    table.merge_cells(pan, 1, 4, 2, 4)
+
+    // ── Linha 5: Distancia da Branca ──
+    string dwTxt = (distW >= 0 ? "+" : "") + str.tostring(distW, "#.##") + "%"
+    color dwCor = distW > 0 ? cV : distW < 0 ? cR : cG
+    table.cell(pan, 0, 5, "Dist.W", text_color=cB, text_size=szTxt, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 5, dwTxt, text_color=dwCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+    table.merge_cells(pan, 1, 5, 2, 5)
+
+    // ── Linha 6: Distancia da Amarela ──
+    string dyTxt = (distY >= 0 ? "+" : "") + str.tostring(distY, "#.##") + "%"
+    color dyCor = distY > 0 ? cV : distY < 0 ? cR : cG
+    table.cell(pan, 0, 6, "Dist.Y", text_color=cB, text_size=szTxt, bgcolor=cF, text_halign=text.align_left)
+    table.cell(pan, 1, 6, dyTxt, text_color=dyCor, text_size=szTxt, bgcolor=cF, text_halign=text.align_center)
+    table.merge_cells(pan, 1, 6, 2, 6)
+
+// ══════════════════════════════════════════════════════════════════════════
+// FIM — ES Rompimentos SMAs B&A v1.0
+// ══════════════════════════════════════════════════════════════════════════
