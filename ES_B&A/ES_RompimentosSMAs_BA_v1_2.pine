@@ -79,6 +79,12 @@ indicator("ES Rompimentos SMAs B&A v1.2", "ES_B&A v1.2", overlay=true, max_label
 //     classico) foi escolha deliberada: a cor no grafico e o texto no painel
 //     precisam dizer a MESMA coisa, senao viram duas licoes concorrentes.
 //
+//   - "acima das duas medias" => "FECHOU acima das duas medias". A frase antiga
+//     nao dizia O QUE estava acima, e a leitura natural e "o corpo do candle".
+//     A comparacao e com o CLOSE — a mesma regua que dispara a entrada. Uma
+//     palavra a mais tira a ambiguidade e repete a regra de ouro do metodo
+//     ("o gatilho e o fechamento") toda vez que o usuario olha o painel.
+//
 //   VARREDURA DO PAINEL (04/08/2026, a pedido do Ricardo)
 //   - BUG DE PRECEDENCIA: "SINAL SE FORMANDO" vinha antes de "PODE VIRAR". Com
 //     o usuario posicionado e o preco cruzando a amarela ao contrario, as duas
@@ -526,7 +532,7 @@ if showPanel and barstate.islast
         table.cell(pan, 1, 9, pqTxt, text_color=cG, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
 
         // DESCREVE a zona. Ate a v1.1 dizia "NAO ENTRE" contradizendo a seta.
-        string zTxt = not ok ? "—" : zAcima ? "acima das duas médias" : zAbaixo ? "abaixo das duas médias" : "entre as médias — não consolidado"
+        string zTxt = not ok ? "—" : zAcima ? "fechou acima das duas médias" : zAbaixo ? "fechou abaixo das duas médias" : "fechou entre as médias — não consolidado"
         color zCor = not ok ? cG : zAcima ? cV : zAbaixo ? cR : cL
         table.cell(pan, 0, 10, "Zona", text_color=cB, text_size=szSub, bgcolor=cF, text_halign=text.align_left)
         table.cell(pan, 1, 10, zTxt, text_color=zCor, text_size=szSub, bgcolor=cF, text_halign=text.align_center)
