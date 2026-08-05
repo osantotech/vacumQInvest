@@ -798,7 +798,19 @@ plotshape(posPBsignal and pos == -1, "PPB-ec Short", shape.labeldown, location.a
 
 // Sinal disparado CONTRA a tendencia do drone — o sinal continua valendo e
 // continua sendo enviado; a marca so avisa que o grafico maior discorda.
-plotchar(htfMarcar and sinalEntrada and htfContra, "Sinal contra o drone", "⚠", location.top, color.new(#FF5252, 0), size=size.tiny)
+//
+// O ⚠ fica no TOPO de proposito: ele nao e um sinal de entrada, e um
+// enquadramento do sinal. Junto da vela competiria com as etiquetas ED/PBv/
+// PPB-ec e seria lido como "mais um sinal".
+//
+// So que isso criou outro problema: la em cima ele perde a ancora visual, e num
+// grafico com varias entradas nao da para saber a QUAL vela ele pertence — o
+// usuario tem que tracar uma linha vertical mentalmente. A coluna de fundo
+// abaixo resolve: liga o aviso a vela certa sem acrescentar nenhuma marca nova
+// perto do preco. Transparencia alta porque e pista, nao informacao principal.
+bool avisoDrone = htfMarcar and sinalEntrada and htfContra
+plotchar(avisoDrone, "Sinal contra o drone", "⚠", location.top, color.new(#FF5252, 0), size=size.tiny)
+bgcolor(avisoDrone ? color.new(#FF5252, 90) : na, title="Coluna do sinal contra o drone")
 
 // v1.8: rejeicao na OTE (CONTEXTO, nao entrada) — simbolo distinto, discreto
 plotshape(showOteMark and rejLong, "OTE rejeicao Long", shape.xcross, location.belowbar, color.new(#FFB300, 0), size=size.tiny)

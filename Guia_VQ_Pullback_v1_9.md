@@ -173,11 +173,22 @@ O preço exato onde a operação começou (de onde o spread é medido). Confira 
 ### ✕ âmbar (xis pequeno)
 **Rejeição na OTE.** O preço tocou a zona OTE e voltou com força. É **contexto**, não é gatilho de entrada — confirma que a zona está "segurando".
 
-### ⚠ vermelho (no alto do gráfico)
+### ⚠ vermelho (no alto do gráfico) + coluna avermelhada
 **Sinal contra o drone.** Nasceu um sinal de entrada (ED, PBv ou PPB-ec) na
-direção oposta à do gráfico de 2h. Aparece no topo da tela, não junto da vela,
-para não competir com as marcas de entrada — é um enquadramento do sinal, não
-um sinal a mais.
+direção oposta à do gráfico de 2h.
+
+O ⚠ aparece no **topo** da tela, não junto da vela, para não competir com as
+etiquetas ED/PBv/PPB-ec — ele não é mais um sinal, é um **enquadramento** do
+sinal que já existe.
+
+E a **coluna avermelhada bem clara** que desce do ⚠ até o rodapé serve para você
+saber **a qual vela ele pertence**. Sem ela, o aviso ficava solto lá em cima e
+num gráfico com várias entradas você tinha que traçar a linha vertical de
+cabeça.
+
+**O que fazer com isso:** o sinal continua valendo e continua sendo enviado para
+a plataforma. Só saiba que você estaria remando contra a maré — espere alvo
+menor, reversão mais cedo e menos margem para errar o stop.
 
 ---
 
